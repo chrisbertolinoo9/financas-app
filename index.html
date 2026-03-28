@@ -2047,18 +2047,19 @@ function saveReaj(){
 // ════════════════════════════════════════════════
 function confirmClearSection(section){
   const labels={contas:'todas as contas e seus saldos',cartoes:'todos os cartões'};
-  if(confirm(`⚠️ Limpar ${labels[section]||section}?\n\nEsta ação não pode ser desfeita.`)){
+  if(confirm('⚠️ Limpar '+( labels[section]||section)+'?\n\nEsta ação não pode ser desfeita.')){
     if(section==='contas') DB.accounts=[];
     else if(section==='cartoes') DB.cards=[];
     saveDB(); renderAll();
     toast('✓ Dados limpos','#22c55e');
   }
 }
+
+function confirmClearAll(){
   if(confirm('⚠️ Apagar TODOS os dados?\n\nTransações, contas, cartões e metas serão removidos permanentemente.\n\nEsta ação não pode ser desfeita.')){
-    // Apaga todas as versões do banco
     ['fp_db','fp_db_v1','fp_db_v2','fp_db_v3','financas_db'].forEach(k=>localStorage.removeItem(k));
     DB={transactions:[],accounts:[],cards:[],planGoals:[]};
-    renderAll();
+    saveDB(); renderAll();
     toast('✓ Todos os dados foram apagados','#22c55e');
   }
 }
