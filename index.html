@@ -291,7 +291,31 @@ select.fi option{background:var(--card2);color:var(--text);}
 /* ── DELETE CONFIRM ──────────────────────────────── */
 
 /* ── ACC DETAIL PANEL ────────────────────────────── */
-.acc-detail{width:560px;max-height:90vh;overflow-y:auto;}
+.acc-detail{width:780px;max-width:98vw;max-height:92vh;overflow-y:auto;}
+/* ── ACC TX FILTER TABS ── */
+.acc-tx-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+.acc-tx-tab{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Sora',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .18s;}
+.acc-tx-tab:hover{color:var(--text);}
+.acc-tx-tab.on{background:var(--glow);border-color:var(--accent);color:var(--accent);}
+.acc-tx-tab.rec.on{background:rgba(34,197,94,.1);border-color:var(--green);color:var(--green);}
+.acc-tx-tab.desp.on{background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);}
+.acc-tx-tab.transf.on{background:rgba(59,130,246,.1);border-color:var(--blue);color:var(--blue);}
+/* ── ACC TX SUMMARY CARDS ── */
+.acc-tx-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+.acc-tx-sum-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+.acc-tx-sum-lbl{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+.acc-tx-sum-val{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;}
+/* ── ACC TX TABLE ── */
+.acc-tx-table{display:flex;flex-direction:column;gap:2px;}
+.acc-tx-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;transition:background .13s;cursor:pointer;position:relative;}
+.acc-tx-row:hover{background:var(--bg3);}
+.acc-tx-row:hover .tx-acts{opacity:1;}
+.acc-tx-row:hover .acc-tx-val-wrap{opacity:0;}
+.acc-tx-date-col{font-size:10px;color:var(--muted);white-space:nowrap;min-width:36px;}
+.acc-tx-info{min-width:0;}
+.acc-tx-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.acc-tx-cat{font-size:10px;color:var(--muted);margin-top:1px;}
+.acc-tx-val-wrap{text-align:right;flex-shrink:0;}
 .acc-det-header{
   display:flex;flex-direction:column;align-items:center;
   padding:24px 20px 20px;
@@ -732,14 +756,16 @@ select.fi option{background:var(--card2);color:var(--text);}
 <!-- MODAL: DETALHES DA CONTA -->
 <div class="ov" id="accDetOv" onclick="if(event.target.id==='accDetOv')closeAccDet()">
   <div class="md acc-detail">
+
+    <!-- HEADER: icon + selector + saldo + actions -->
     <div class="acc-det-header">
       <div class="acc-det-icon" id="adIcon">🏦</div>
-      <div style="display:flex;align-items:center;gap:10px;position:relative;">
-        <select id="adAccSel" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;color:var(--text);outline:none;cursor:pointer;" onchange="switchAccDetail(this.value)"></select>
-        <button onclick="closeAccDet()" style="background:none;border:none;color:var(--muted);font-size:17px;cursor:pointer;padding:2px 6px;">✕</button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <select id="adAccSel" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;color:var(--text);outline:none;cursor:pointer;" onchange="switchAccDetail(this.value)"></select>
+        <button onclick="closeAccDet()" style="background:none;border:none;color:var(--muted);font-size:17px;cursor:pointer;padding:2px 8px;">✕</button>
       </div>
       <div class="acc-det-type" id="adType">Conta Corrente</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Saldo atual</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:5px;">Saldo atual</div>
       <div class="acc-det-bal" id="adBal">R$ 0,00</div>
       <div class="acc-det-actions">
         <div class="acc-act-btn" onclick="openAccDetTx('despesa')"><span class="aab-ico">↓</span>Despesa</div>
@@ -749,11 +775,32 @@ select.fi option{background:var(--card2);color:var(--text);}
         <div class="acc-act-btn" onclick="closeAccDet();openAccModal(_detAccId)"><span class="aab-ico">✏️</span>Editar</div>
       </div>
     </div>
+
+    <!-- INFO ROWS (tipo, saldo inicial, toggle) -->
     <div class="acc-det-info" id="adInfo"></div>
-    <div class="acc-det-tx">
-      <div class="acc-det-tx-title">Lançamentos recentes</div>
-      <div id="adTxList"></div>
+
+    <!-- MOVIMENTAÇÕES -->
+    <div style="margin-top:6px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Movimentações</div>
+        <button onclick="openAccDetTx('despesa')" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:8px;padding:6px 12px;font-family:'Sora',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">+ Nova Despesa</button>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="acc-tx-summary" id="adTxSummary"></div>
+
+      <!-- Filter tabs -->
+      <div class="acc-tx-tabs">
+        <button class="acc-tx-tab on" id="adTab-all" onclick="setAccTxTab('all')">● Todas</button>
+        <button class="acc-tx-tab desp" id="adTab-despesa" onclick="setAccTxTab('despesa')">● Despesas</button>
+        <button class="acc-tx-tab rec" id="adTab-receita" onclick="setAccTxTab('receita')">● Receitas</button>
+        <button class="acc-tx-tab transf" id="adTab-transf" onclick="setAccTxTab('transf')">● Transferências</button>
+      </div>
+
+      <!-- Transaction list -->
+      <div style="max-height:280px;overflow-y:auto;" id="adTxList"></div>
     </div>
+
   </div>
 </div>
 
@@ -1224,58 +1271,136 @@ function openAccDetail(accId){
 }
 function closeAccDet(){ document.getElementById('accDetOv').classList.remove('on'); }
 
+let _accTxTab='all';
+
+function setAccTxTab(tab){
+  _accTxTab=tab;
+  document.querySelectorAll('.acc-tx-tab').forEach(b=>b.classList.remove('on'));
+  const el=document.getElementById('adTab-'+tab);
+  if(el) el.classList.add('on');
+  renderAccTxList();
+}
+
 function renderAccDetail(){
   const a=DB.accounts.find(x=>x.id===_detAccId);
   if(!a) return;
 
   // Header
-  const icon=ACC_ICONS_MAP[a.type]||'🏦';
-  document.getElementById('adIcon').textContent=icon;
+  document.getElementById('adIcon').textContent=ACC_ICONS_MAP[a.type]||'🏦';
   document.getElementById('adIcon').style.background=(a.color||'#6366f1')+'22';
   document.getElementById('adType').textContent=ACC_TYPE_LBL[a.type]||a.type;
   const balEl=document.getElementById('adBal');
   balEl.textContent='R$ '+fmt(a.balance);
   balEl.style.color=a.balance>=0?'var(--green)':'var(--red)';
 
-  // Account selector dropdown
-  const sel=document.getElementById('adAccSel');
-  sel.innerHTML=DB.accounts.filter(x=>!x.archived).map(x=>`<option value="${x.id}"${x.id===_detAccId?' selected':''}>${x.name}</option>`).join('');
+  // Account selector
+  document.getElementById('adAccSel').innerHTML=DB.accounts.filter(x=>!x.archived).map(x=>`<option value="${x.id}"${x.id===_detAccId?' selected':''}>${x.name}</option>`).join('');
 
   // Stats
   const allTx=DB.transactions.filter(t=>t.accId===a.id);
   const monthTx=allTx.filter(inCurMonth);
-  const desp=allTx.filter(t=>t.type==='despesa').length;
-  const rec=allTx.filter(t=>t.type==='receita').length;
-  const despVal=allTx.filter(t=>t.type==='despesa').reduce((s,t)=>s+t.val,0);
-  const recVal=allTx.filter(t=>t.type==='receita').reduce((s,t)=>s+t.val,0);
+  const despTx=allTx.filter(t=>t.type==='despesa');
+  const recTx=allTx.filter(t=>t.type==='receita');
+  const despVal=despTx.reduce((s,t)=>s+t.val,0);
+  const recVal=recTx.reduce((s,t)=>s+t.val,0);
+  const transfTx=allTx.filter(t=>t.icon==='⇄');
 
+  // Info rows
   document.getElementById('adInfo').innerHTML=`
-    <div class="acc-det-row"><span class="acc-det-row-lbl">Tipo de conta</span><span class="acc-det-row-val">${ACC_TYPE_LBL[a.type]||a.type}</span></div>
-    <div class="acc-det-row"><span class="acc-det-row-lbl">Saldo inicial</span><span class="acc-det-row-val">R$ ${fmt(a.initialBalance||0)}</span></div>
-    <div class="acc-det-row clickable" onclick="filterByAccType(a.id,'despesa')">
-      <span class="acc-det-row-lbl">Despesas (total)</span>
-      <span class="acc-det-row-val" style="color:var(--red);">${desp} despesa${desp!==1?'s':''} · R$ ${fmt(despVal)}<span class="arr">›</span></span>
-    </div>
-    <div class="acc-det-row clickable" onclick="filterByAccType('${a.id}','receita')">
-      <span class="acc-det-row-lbl">Receitas (total)</span>
-      <span class="acc-det-row-val" style="color:var(--green);">${rec} receita${rec!==1?'s':''} · R$ ${fmt(recVal)}<span class="arr">›</span></span>
-    </div>
-    <div class="acc-det-row">
-      <span class="acc-det-row-lbl">Lançamentos este mês</span>
-      <span class="acc-det-row-val">${monthTx.length}</span>
-    </div>
-    <div class="acc-det-row" style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;">
-      <span class="acc-det-row-lbl">Incluir no saldo total</span>
-      <div onclick="toggleAccInclude('${a.id}')" style="width:36px;height:20px;border-radius:99px;background:${a.includeInTotal!==false?'var(--accent)':'var(--bg3)'};border:1px solid ${a.includeInTotal!==false?'var(--accent)':'var(--border)'};cursor:pointer;transition:all .2s;position:relative;">
-        <div style="width:14px;height:14px;border-radius:50%;background:#fff;position:absolute;top:2px;${a.includeInTotal!==false?'right:2px':'left:2px'};transition:all .2s;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <div class="acc-det-row" style="border-right:1px solid var(--border);">
+        <span class="acc-det-row-lbl">Tipo de conta</span>
+        <span class="acc-det-row-val">${ACC_TYPE_LBL[a.type]||a.type}</span>
+      </div>
+      <div class="acc-det-row">
+        <span class="acc-det-row-lbl">Saldo inicial</span>
+        <span class="acc-det-row-val">R$ ${fmt(a.initialBalance||0)}</span>
+      </div>
+      <div class="acc-det-row" style="border-right:1px solid var(--border);border-top:1px solid var(--border);">
+        <span class="acc-det-row-lbl">Lançamentos este mês</span>
+        <span class="acc-det-row-val">${monthTx.length}</span>
+      </div>
+      <div class="acc-det-row" style="border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <span class="acc-det-row-lbl">Incluir no saldo total</span>
+        <div onclick="toggleAccInclude('${a.id}')" style="width:34px;height:19px;border-radius:99px;background:${a.includeInTotal!==false?'var(--accent)':'var(--bg3)'};border:1px solid ${a.includeInTotal!==false?'var(--accent)':'var(--border)'};cursor:pointer;transition:all .2s;position:relative;flex-shrink:0;">
+          <div style="width:13px;height:13px;border-radius:50%;background:#fff;position:absolute;top:2px;${a.includeInTotal!==false?'right:2px':'left:2px'};transition:all .2s;"></div>
+        </div>
       </div>
     </div>`;
 
-  // Recent txs for this account
-  const recentTx=[...allTx].sort((a,b)=>b.dateISO.localeCompare(a.dateISO)).slice(0,6);
-  document.getElementById('adTxList').innerHTML=recentTx.length
-    ? recentTx.map(t=>txRow(t)).join('')
-    : '<div class="empty">Nenhum lançamento nesta conta</div>';
+  // Summary cards
+  document.getElementById('adTxSummary').innerHTML=`
+    <div class="acc-tx-sum-card">
+      <div class="acc-tx-sum-lbl">Despesas</div>
+      <div class="acc-tx-sum-val" style="color:var(--red);">R$ ${fmt(despVal)}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:3px;">${despTx.length} lançamento${despTx.length!==1?'s':''}</div>
+    </div>
+    <div class="acc-tx-sum-card">
+      <div class="acc-tx-sum-lbl">Receitas</div>
+      <div class="acc-tx-sum-val" style="color:var(--green);">R$ ${fmt(recVal)}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:3px;">${recTx.length} lançamento${recTx.length!==1?'s':''}</div>
+    </div>
+    <div class="acc-tx-sum-card">
+      <div class="acc-tx-sum-lbl">Saldo período</div>
+      <div class="acc-tx-sum-val" style="color:${recVal-despVal>=0?'var(--green)':'var(--red)'};">R$ ${fmt(recVal-despVal)}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:3px;">${transfTx.length} transferência${transfTx.length!==1?'s':''}</div>
+    </div>`;
+
+  // Reset tab and render tx list
+  _accTxTab='all';
+  document.querySelectorAll('.acc-tx-tab').forEach(b=>b.classList.remove('on'));
+  const tabEl=document.getElementById('adTab-all');
+  if(tabEl) tabEl.classList.add('on');
+  renderAccTxList();
+}
+
+function renderAccTxList(){
+  const a=DB.accounts.find(x=>x.id===_detAccId);
+  if(!a) return;
+  let txs=DB.transactions.filter(t=>t.accId===a.id);
+  if(_accTxTab==='despesa') txs=txs.filter(t=>t.type==='despesa'&&t.icon!=='⇄');
+  else if(_accTxTab==='receita') txs=txs.filter(t=>t.type==='receita'&&t.icon!=='⇄');
+  else if(_accTxTab==='transf') txs=txs.filter(t=>t.icon==='⇄');
+  txs=[...txs].sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
+
+  const el=document.getElementById('adTxList');
+  if(!txs.length){
+    el.innerHTML='<div class="empty">Nenhuma movimentação encontrada</div>';
+    return;
+  }
+
+  // Group by date
+  const byDate={};
+  txs.forEach(t=>{
+    const d=t.dateISO||'';
+    if(!byDate[d]) byDate[d]=[];
+    byDate[d].push(t);
+  });
+
+  el.innerHTML=Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).map(([dateISO,dayTxs])=>{
+    const dateLabel=new Date(dateISO+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
+    const dayTotal=dayTxs.reduce((s,t)=>t.type==='receita'?s+t.val:s-t.val,0);
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px 4px;margin-top:4px;">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:capitalize;">${dateLabel}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${dayTotal>=0?'var(--green)':'var(--red)'};">${dayTotal>=0?'+':''}R$ ${fmt(Math.abs(dayTotal))}</div>
+      </div>
+      ${dayTxs.map(t=>`
+        <div class="txi" style="padding:9px 12px;">
+          <div class="tx-ico" style="background:${t.color||'#6b7591'}22;">${t.icon||'💰'}</div>
+          <div class="tx-info">
+            <div class="tx-nm">${t.name}</div>
+            <div class="tx-ct">${t.cat}</div>
+          </div>
+          <div class="tx-r">
+            <div class="tx-v ${t.type==='receita'?'p':'n'}">${t.type==='receita'?'+':'-'} R$ ${fmt(t.val)}</div>
+          </div>
+          <div class="tx-acts">
+            <button class="act-btn" onclick="closeAccDet();openTxModal('${t.id}')" title="Editar">✏️</button>
+            <button class="act-btn del" onclick="closeAccDet();confirmDelItem('tx','${t.id}','transação')" title="Excluir">🗑</button>
+          </div>
+        </div>`).join('')}`;
+  }).join('');
 }
 
 function switchAccDetail(accId){
