@@ -1973,10 +1973,14 @@ async function runAI(){
   const firstPreview=firstItem.type==='pdf'
     ?`<div class="prev-img" style="flex-direction:column;gap:10px;"><div style="font-size:48px;">📄</div><div style="font-size:13px;font-weight:700;">${firstItem.name||'Arquivo PDF'}</div><div style="font-size:11px;color:var(--muted);">PDF será analisado página a página</div></div>`
     :`<div class="prev-img"><img src="${firstItem.dataUrl}"></div>`;
-  ps.innerHTML=firstPreview+``;
-    <div class="ai-box" style="display:flex;flex-direction:column;justify-content:center;gap:7px;">
+  ps.innerHTML=firstPreview+`<div class="ai-box" style="display:flex;flex-direction:column;justify-content:center;gap:7px;margin-top:14px;">
       <div style="font-size:12px;font-weight:700;margin-bottom:4px;">O que a IA detecta:</div>
-      ${['✅ Datas das transações','✅ Valores e moeda','✅ Descrição dos lançamentos','✅ Tipo (crédito/débito)','✅ Categoria sugerida','✅ Duplicatas detectadas'].map(s=>`<div style="font-size:11px;color:var(--muted);">${s}</div>`).join('')}
+      <div style="font-size:11px;color:var(--muted);">✅ Datas das transações</div>
+      <div style="font-size:11px;color:var(--muted);">✅ Valores e moeda</div>
+      <div style="font-size:11px;color:var(--muted);">✅ Descrição dos lançamentos</div>
+      <div style="font-size:11px;color:var(--muted);">✅ Tipo (crédito/débito)</div>
+      <div style="font-size:11px;color:var(--muted);">✅ Categoria sugerida</div>
+      <div style="font-size:11px;color:var(--muted);">✅ Duplicatas detectadas</div>
     </div>`;
 
   const msgs=[['Lendo imagem...','Identificando texto'],['Detectando tabelas...','Localizando transações'],['Extraindo dados...','Datas, valores, descrições'],['Classificando...','Sugerindo categorias'],['Verificando duplicatas...','Comparando histórico'],['Finalizando...','Preparando revisão']];
