@@ -1991,34 +1991,76 @@ async function runAI(){
 
   try{
     const content=[];
+    const hasPdf=_impImgs.some(i=>i.type==='pdf');
+
     for(const img of _impImgs){
       if(img.type==='pdf'){
-        // Send PDF as base64 document block
         content.push({
           type:'document',
           source:{type:'base64',media_type:'application/pdf',data:img.dataUrl.split(',')[1]}
         });
       } else {
-        content.push({type:'image',source:{type:'base64',media_type:img.file.type||'image/jpeg',data:img.dataUrl.split(',')[1]}});
+        content.push({
+          type:'image',
+          source:{type:'base64',media_type:img.file.type||'image/jpeg',data:img.dataUrl.split(',')[1]}
+        });
       }
     }
-    const hasPdf=_impImgs.some(i=>i.type==='pdf');
-    content.push({type:'text',text:`Analise ${_impImgs.length>1?'estes arquivos':'este arquivo'} de extrato/fatura bancária (${hasPdf?'inclui PDF':'imagens'}). Retorne APENAS JSON válido sem markdown:\n{"source":"banco detectado","transactions":[{"name":"descrição","val":0.00,"type":"despesa ou receita","cat":"Alimentação|Moradia|Transporte|Saúde|Lazer|Salário|Freelance|Assinatura|Educação|Vestuário|Combustível|Outros","date":"DD/MM","icon":"emoji"}]}\nRegras: cartão=despesa, crédito bancário=receita, débito=despesa. Para PDF extraia TODAS as transações da fatura. Valores numéricos sem R$ e sem pontos de milhar. Se não houver transações retorne transactions:[].`});
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,messages:[{role:'user',content}],betas:['pdfs-2024-09-25']})});
-    const data=await resp.json();
+
+    content.push({type:'text',text:`Analise ${_impImgs.length>1?'estes arquivos':'este arquivo'} de extrato/fatura bancária${hasPdf?' (PDF)':' (imagem)'}. Retorne APENAS JSON válido sem markdown:\n{"source":"banco detectado","transactions":[{"name":"descrição","val":0.00,"type":"despesa ou receita","cat":"Alimentação|Moradia|Transporte|Saúde|Lazer|Salário|Freelance|Assinatura|Educação|Vestuário|Combustível|Outros","date":"DD/MM","icon":"emoji"}]}\nRegras: cartão=despesa, crédito bancário=receita, débito=despesa. Para PDF extraia TODAS as transações visíveis. Valores numéricos puros sem R$ e sem pontos de milhar. Se não houver transações retorne transactions:[].`});
+
+    // Build request — PDFs need the anthropic-beta header
+    const headers = {'Content-Type':'application/json'};
+    if(hasPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25';
+
+    const body = {
+      model:'claude-sonnet-4-20250514',
+      max_tokens:4000,
+      messages:[{role:'user',content}]
+    };
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers,
+      body:JSON.stringify(body)
+    });
+
+    const data = await resp.json();
     clearInterval(mInt);clearInterval(pInt);
+
+    // Check for API-level errors
+    if(data.error){
+      throw new Error(data.error.message || 'API error: '+data.error.type);
+    }
+    if(!data.content || !data.content.length){
+      throw new Error('Resposta vazia da API');
+    }
+
     document.getElementById('pf').style.width='100%';document.getElementById('pct').textContent='100%';
     document.getElementById('aiT').textContent='Concluído!';
 
     let extracted={transactions:[]};
-    try{ extracted=JSON.parse(data.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim()); }catch(e){}
+    try{
+      const rawText=data.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+      extracted=JSON.parse(rawText);
+    }catch(parseErr){
+      // If JSON parse fails but we got text, show what we got
+      console.warn('Parse error:', parseErr);
+    }
     await new Promise(r=>setTimeout(r,500));
     buildReview(extracted);impGoStep(3);
+
   }catch(e){
     clearInterval(mInt);clearInterval(pInt);
+    console.error('AI error:', e);
     document.getElementById('aiT').textContent='Erro na análise';
+    document.getElementById('aiS').textContent=e.message||'Verifique o arquivo e tente novamente';
     document.getElementById('aiT').style.color='var(--red)';
-    setTimeout(()=>impGoStep(1),2000);
+    // Show retry button instead of auto-redirect
+    setTimeout(()=>{
+      document.getElementById('aiT').style.color='';
+      impGoStep(1);
+    },3500);
   }
 }
 
