@@ -726,9 +726,12 @@ select.fi option{background:var(--card2);color:var(--text);}
       <button onclick="closeInv()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px;">✕</button>
     </div>
     <div id="invSummaryBox" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px;"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
       <div style="font-size:12px;font-weight:700;color:var(--muted);">Lançamentos da fatura</div>
-      <button class="sb-new" style="width:auto;margin:0;padding:7px 12px;font-size:11px;" onclick="addCardTx()">+ Lançamento</button>
+      <div style="display:flex;gap:7px;">
+        <button class="card-imp-btn" onclick="openCardImport(_invCardId)">📄 Importar print/PDF</button>
+        <button class="sb-new" style="width:auto;margin:0;padding:7px 12px;font-size:11px;" onclick="addCardTx()">+ Lançamento</button>
+      </div>
     </div>
     <div id="invTxList"></div>
   </div>
@@ -874,7 +877,7 @@ select.fi option{background:var(--card2);color:var(--text);}
 <div class="ov" id="impOv" onclick="if(event.target.id==='impOv')closeImport()">
   <div class="md wide">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;">
-      <div><div class="md-title">📷 Importar por Imagem</div><div class="md-sub" style="margin:0;">Print de extrato ou fatura — a IA extrai e você revisa</div></div>
+      <div><div class="md-title">📄 Importar Extrato / Fatura</div><div class="md-sub" style="margin:0;">Print, imagem ou PDF de extrato ou fatura — a IA extrai e você revisa</div></div>
       <button onclick="closeImport()" style="background:none;border:none;color:var(--muted);font-size:17px;cursor:pointer;padding:2px 6px;">✕</button>
     </div>
     <div class="imp-steps" style="margin:16px 0 22px;">
@@ -887,17 +890,29 @@ select.fi option{background:var(--card2);color:var(--text);}
       <div class="is"><div class="isn" id="isn4">4</div><div class="isl" id="isl4">Concluído</div></div>
     </div>
     <div class="sp on" id="sp1">
-      <div class="drop-z" id="dropZ" ondragover="dDragOver(event)" ondragleave="dDragLeave()" ondrop="dDrop(event)">
-        <input type="file" accept="image/*" multiple onchange="handleFiles(event)">
-        <div style="font-size:40px;margin-bottom:12px;">🖼️</div>
-        <div style="font-size:14px;font-weight:700;margin-bottom:5px;">Arraste prints aqui ou clique</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Extrato bancário, fatura, print de app</div>
-        <div class="dfmts"><span class="dfmt">PNG</span><span class="dfmt">JPG</span><span class="dfmt">WEBP</span><span class="dfmt">Múltiplos</span></div>
+      <!-- Two upload options side by side -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <!-- Images -->
+        <div class="drop-z" id="dropZ" ondragover="dDragOver(event)" ondragleave="dDragLeave()" ondrop="dDrop(event)" style="padding:24px 16px;">
+          <input type="file" accept="image/*,image/png,image/jpg,image/jpeg,image/webp" multiple onchange="handleFiles(event)">
+          <div style="font-size:32px;margin-bottom:10px;">🖼️</div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Print / Imagem</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:10px;">Screenshot do app bancário</div>
+          <div class="dfmts"><span class="dfmt">PNG</span><span class="dfmt">JPG</span><span class="dfmt">WEBP</span></div>
+        </div>
+        <!-- PDF -->
+        <div class="drop-z" id="dropZPdf" ondragover="dDragOverPdf(event)" ondragleave="dDragLeavePdf()" ondrop="dDropPdf(event)" style="padding:24px 16px;">
+          <input type="file" accept="application/pdf,.pdf" multiple onchange="handlePdfs(event)">
+          <div style="font-size:32px;margin-bottom:10px;">📄</div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">PDF / Relatório</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:10px;">Fatura ou extrato em PDF</div>
+          <div class="dfmts"><span class="dfmt">PDF</span><span class="dfmt">Múltiplos</span></div>
+        </div>
       </div>
-      <div id="thumbArea" style="display:none;margin-top:12px;">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;">Selecionadas</div>
+      <div id="thumbArea" style="display:none;margin-top:4px;">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;">Arquivos selecionados</div>
         <div class="thumbs" id="thumbsCont"></div>
-        <div style="font-size:10px;color:var(--muted);margin-top:8px;padding:5px 9px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);">💡 Múltiplas imagens aceitas — duplicatas detectadas automaticamente</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px;padding:5px 9px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);">💡 Misture imagens e PDFs — duplicatas detectadas automaticamente</div>
       </div>
       <div class="md-foot" style="margin-top:16px;">
         <button class="bc" onclick="closeImport()">Cancelar</button>
@@ -1897,28 +1912,68 @@ function dDragLeave(){document.getElementById('dropZ').classList.remove('drag');
 function dDrop(e){e.preventDefault();document.getElementById('dropZ').classList.remove('drag');handleFiles({target:{files:e.dataTransfer.files}});}
 function handleFiles(e){
   Array.from(e.target.files).forEach(file=>{
-    if(!file.type.startsWith('image/'))return;
-    const r=new FileReader();r.onload=ev=>{_impImgs.push({file,dataUrl:ev.target.result});renderThumbs();};r.readAsDataURL(file);
+    if(!file.type.startsWith('image/')) return;
+    const r=new FileReader();
+    r.onload=ev=>{ _impImgs.push({file,dataUrl:ev.target.result,type:'image'}); renderThumbs(); };
+    r.readAsDataURL(file);
   });
 }
+
+function handlePdfs(e){
+  Array.from(e.target.files).forEach(file=>{
+    if(file.type!=='application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      // Store PDF as base64 data URL; we'll send pages as images via pdf.js rendering
+      _impImgs.push({file,dataUrl:ev.target.result,type:'pdf',name:file.name});
+      renderThumbs();
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+function dDragOverPdf(e){e.preventDefault();document.getElementById('dropZPdf').classList.add('drag');}
+function dDragLeavePdf(){document.getElementById('dropZPdf').classList.remove('drag');}
+function dDropPdf(e){e.preventDefault();document.getElementById('dropZPdf').classList.remove('drag');handlePdfs({target:{files:e.dataTransfer.files}});}
 function renderThumbs(){
   const c=document.getElementById('thumbsCont');
   document.getElementById('thumbArea').style.display='block';
   c.innerHTML='';
   _impImgs.forEach((img,i)=>{
-    const d=document.createElement('div');d.className='thb';
-    d.innerHTML=`<img src="${img.dataUrl}"><div class="thb-del" onclick="rmImg(${i})">✕</div>`;c.appendChild(d);
+    const d=document.createElement('div');
+    d.className='thb';
+    if(img.type==='pdf'){
+      d.innerHTML=`<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(239,68,68,.1);gap:2px;">
+        <span style="font-size:20px;">📄</span>
+        <span style="font-size:8px;color:var(--muted);font-weight:700;text-align:center;padding:0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;">${img.name||'PDF'}</span>
+      </div>
+      <div class="thb-del" onclick="rmImg(${i})">✕</div>`;
+    } else {
+      d.innerHTML=`<img src="${img.dataUrl}"><div class="thb-del" onclick="rmImg(${i})">✕</div>`;
+    }
+    c.appendChild(d);
   });
   const add=document.createElement('div');add.className='thb-add';
-  add.innerHTML='<span>＋</span><input type="file" accept="image/*" multiple onchange="handleFiles(event)">';c.appendChild(add);
+  add.innerHTML='<span>＋</span><input type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleFilesOrPdfs(event)">';c.appendChild(add);
   const btn=document.getElementById('impAnalyzeBtn');btn.disabled=false;btn.style.opacity='1';
+}
+
+function handleFilesOrPdfs(e){
+  Array.from(e.target.files).forEach(file=>{
+    if(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')) handlePdfs({target:{files:[file]}});
+    else if(file.type.startsWith('image/')) handleFiles({target:{files:[file]}});
+  });
 }
 function rmImg(i){ _impImgs.splice(i,1); if(!_impImgs.length){document.getElementById('thumbArea').style.display='none';document.getElementById('impAnalyzeBtn').disabled=true;document.getElementById('impAnalyzeBtn').style.opacity='.5';}else renderThumbs(); }
 
 async function runAI(){
   impGoStep(2);
   const ps=document.getElementById('prevSec');
-  ps.innerHTML=`<div class="prev-img"><img src="${_impImgs[0].dataUrl}"></div>
+  const firstItem=_impImgs[0];
+  const firstPreview=firstItem.type==='pdf'
+    ?`<div class="prev-img" style="flex-direction:column;gap:10px;"><div style="font-size:48px;">📄</div><div style="font-size:13px;font-weight:700;">${firstItem.name||'Arquivo PDF'}</div><div style="font-size:11px;color:var(--muted);">PDF será analisado página a página</div></div>`
+    :`<div class="prev-img"><img src="${firstItem.dataUrl}"></div>`;
+  ps.innerHTML=firstPreview+``;
     <div class="ai-box" style="display:flex;flex-direction:column;justify-content:center;gap:7px;">
       <div style="font-size:12px;font-weight:700;margin-bottom:4px;">O que a IA detecta:</div>
       ${['✅ Datas das transações','✅ Valores e moeda','✅ Descrição dos lançamentos','✅ Tipo (crédito/débito)','✅ Categoria sugerida','✅ Duplicatas detectadas'].map(s=>`<div style="font-size:11px;color:var(--muted);">${s}</div>`).join('')}
@@ -1932,9 +1987,20 @@ async function runAI(){
 
   try{
     const content=[];
-    for(const img of _impImgs) content.push({type:'image',source:{type:'base64',media_type:img.file.type||'image/jpeg',data:img.dataUrl.split(',')[1]}});
-    content.push({type:'text',text:`Analise ${_impImgs.length>1?'estas imagens':'esta imagem'} de extrato/fatura bancária. Retorne APENAS JSON válido sem markdown:\n{"source":"banco detectado","transactions":[{"name":"descrição","val":0.00,"type":"despesa ou receita","cat":"Alimentação|Moradia|Transporte|Saúde|Lazer|Salário|Freelance|Assinatura|Educação|Vestuário|Combustível|Outros","date":"DD/MM","icon":"emoji"}]}\nRegras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores numéricos sem R$. Se não houver transações retorne transactions:[].`});
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content}]})});
+    for(const img of _impImgs){
+      if(img.type==='pdf'){
+        // Send PDF as base64 document block
+        content.push({
+          type:'document',
+          source:{type:'base64',media_type:'application/pdf',data:img.dataUrl.split(',')[1]}
+        });
+      } else {
+        content.push({type:'image',source:{type:'base64',media_type:img.file.type||'image/jpeg',data:img.dataUrl.split(',')[1]}});
+      }
+    }
+    const hasPdf=_impImgs.some(i=>i.type==='pdf');
+    content.push({type:'text',text:`Analise ${_impImgs.length>1?'estes arquivos':'este arquivo'} de extrato/fatura bancária (${hasPdf?'inclui PDF':'imagens'}). Retorne APENAS JSON válido sem markdown:\n{"source":"banco detectado","transactions":[{"name":"descrição","val":0.00,"type":"despesa ou receita","cat":"Alimentação|Moradia|Transporte|Saúde|Lazer|Salário|Freelance|Assinatura|Educação|Vestuário|Combustível|Outros","date":"DD/MM","icon":"emoji"}]}\nRegras: cartão=despesa, crédito bancário=receita, débito=despesa. Para PDF extraia TODAS as transações da fatura. Valores numéricos sem R$ e sem pontos de milhar. Se não houver transações retorne transactions:[].`});
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,messages:[{role:'user',content}],betas:['pdfs-2024-09-25']})});
     const data=await resp.json();
     clearInterval(mInt);clearInterval(pInt);
     document.getElementById('pf').style.width='100%';document.getElementById('pct').textContent='100%';
