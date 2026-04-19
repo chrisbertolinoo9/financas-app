@@ -256,8 +256,8 @@ select.fi option{background:var(--card2);color:var(--text);}
 .is-item{text-align:center;flex:1;}
 .is-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;}
 .is-lbl{font-size:9px;color:var(--muted);margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
-.rh{display:grid;grid-template-columns:24px 1fr 110px 70px 65px 90px 68px 28px;gap:5px;padding:6px 9px;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);margin-bottom:2px;}
-.rr{display:grid;grid-template-columns:24px 1fr 110px 70px 65px 90px 68px 28px;gap:5px;align-items:center;padding:7px 9px;border-radius:7px;border:1px solid transparent;transition:all .13s;margin-bottom:2px;}
+.rh{display:grid;grid-template-columns:24px 1fr 110px 62px 90px 62px 68px 28px;gap:5px;padding:6px 9px;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);margin-bottom:2px;}
+.rr{display:grid;grid-template-columns:24px 1fr 110px 62px 90px 62px 68px 28px;gap:5px;align-items:center;padding:7px 9px;border-radius:7px;border:1px solid transparent;transition:all .13s;margin-bottom:2px;}
 .rr:hover{background:var(--bg3);border-color:var(--border);}
 .rr.dup{background:rgba(239,68,68,.04);border-color:rgba(239,68,68,.14);}
 .rr.excl{opacity:.35;}
@@ -267,7 +267,7 @@ select.fi option{background:var(--card2);color:var(--text);}
 .ri{background:transparent;border:1px solid transparent;border-radius:6px;padding:4px 6px;font-family:'Sora',sans-serif;font-size:11px;color:var(--text);outline:none;width:100%;transition:border-color .13s;}
 .ri:hover{border-color:var(--border);}
 .ri:focus{border-color:var(--accent);background:var(--bg3);}
-.rvs{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;display:flex;align-items:center;gap:3px;}
+.rvs{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden;}
 .rvs.p{color:var(--green);}.rvs.n{color:var(--red);}
 .dup-b{display:inline-flex;background:rgba(239,68,68,.13);border:1px solid rgba(239,68,68,.28);border-radius:4px;padding:2px 5px;font-size:8px;font-weight:700;color:var(--red);}
 .new-b{font-size:9px;font-weight:700;color:var(--green);}
@@ -2511,7 +2511,7 @@ function renderReview(){
       <input class="ri" value="${r.date||''}" onchange="updRow(${i},'date',this.value)" style="max-width:65px;">
       <div class="rvs ${r.type==='receita'?'p':'n'}">
         <span>${r.type==='receita'?'+':'-'}</span>
-        <input class="ri" type="number" value="${r.val}" onchange="updRow(${i},'val',parseFloat(this.value)||0)" style="font-family:'JetBrains Mono',monospace;font-weight:700;color:inherit;">
+        <input class="ri" type="number" value="${r.val}" onchange="updRow(${i},'val',parseFloat(this.value)||0)" style="font-family:'JetBrains Mono',monospace;font-weight:700;color:inherit;width:100%;min-width:0;">
       </div>
       ${parcelaDisplay}
       <div>${r._dup?'<span class="dup-b">⚠ Dup</span>':'<span class="new-b">✓ Nova</span>'}</div>
