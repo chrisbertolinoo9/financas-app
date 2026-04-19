@@ -1709,37 +1709,94 @@ function openAccImport(accId){
 function doImport(){
   const toImp=_pendRows.filter(r=>r._sel);
   if(!toImp.length){toast('Selecione ao menos uma transação','var(--yellow)');return;}
+
+  // Read destination from the UI selector (most reliable source)
+  const selOpt=document.querySelector('.imp-dest-opt.on');
+  const destType=selOpt?.dataset?.type||'none';
+  const destId=selOpt?.dataset?.id||'';
+  const finalCardId=(destType==='card'&&destId)?destId:(_importCardId||null);
+  const finalAccId=(destType==='acc'&&destId)?destId:(_importAccId||null);
+
+  let totalImported=0;
+  let totalInstallments=0;
+
   toImp.forEach(r=>{
-    const year=curYear,month=(curMonth+1).toString().padStart(2,'0');
+    // ── Parse instalment pattern e.g. "Ebn Playstation 2/4" ──
+    const instMatch=r.name.match(/^(.+?)\s+(\d+)\/(\d+)$/);
+    const baseName=instMatch?instMatch[1].trim():r.name;
+    const curPart=instMatch?parseInt(instMatch[2]):1;
+    const totalParts=instMatch?parseInt(instMatch[3]):1;
+    const remainingParts=totalParts-curPart; // parts AFTER current month
+
+    // Parse current date
     const dateParts=(r.date||'').split('/');
-    // Try to parse date from DD/MM format
-    let dateISO;
+    let baseYear=curYear, baseMonth=curMonth;
     if(dateParts.length===2){
-      const day=dateParts[0].padStart(2,'0');
-      const mon=dateParts[1]?dateParts[1].padStart(2,'0'):month;
-      dateISO=`${year}-${mon}-${day}`;
-    } else {
-      dateISO=todayISO();
+      const day=parseInt(dateParts[0])||1;
+      const mon=dateParts[1]?parseInt(dateParts[1])-1:curMonth;
+      baseMonth=mon;
     }
+
+    const makeDate=(yr,mo,day)=>{
+      const m=(mo+1).toString().padStart(2,'0');
+      const d=(day||1).toString().padStart(2,'0');
+      return `${yr}-${m}-${d}`;
+    };
+
+    const day=dateParts.length===2?dateParts[0].padStart(2,'0'):'01';
+    const dateISO=makeDate(baseYear,baseMonth,parseInt(day));
+
+    // Save current instalment
     DB.transactions.unshift({
       id:'tx'+Date.now()+Math.random(),
-      name:r.name,
-      cat:r.cat,
-      type:r.type,
-      val:r.val,
-      dateISO,
-      date:isoToDisplay(dateISO),
+      name:instMatch?`${baseName} ${curPart}/${totalParts}`:r.name,
+      cat:r.cat,type:r.type,val:r.val,
+      dateISO,date:isoToDisplay(dateISO),
       icon:r.icon||C_ICON[r.cat]||'💰',
       color:C_COLOR[r.cat]||'#6b7591',
-      accId:_importAccId||null,
-      cardId:_importCardId||null
+      accId:finalCardId?null:finalAccId,
+      cardId:finalCardId||null,
+      parcelado:totalParts>1,totalParcelas:totalParts,parcelaAtual:curPart
     });
+    totalImported++;
+
+    // ── Create future instalments automatically ──
+    if(instMatch && remainingParts>0){
+      for(let i=1;i<=remainingParts;i++){
+        let futureMonth=baseMonth+i;
+        let futureYear=baseYear;
+        while(futureMonth>11){futureMonth-=12;futureYear++;}
+        const futureDateISO=makeDate(futureYear,futureMonth,parseInt(day));
+        const partNum=curPart+i;
+        DB.transactions.unshift({
+          id:'tx'+Date.now()+Math.random()+'p'+i,
+          name:`${baseName} ${partNum}/${totalParts}`,
+          cat:r.cat,type:r.type,val:r.val,
+          dateISO:futureDateISO,date:isoToDisplay(futureDateISO),
+          icon:r.icon||C_ICON[r.cat]||'💰',
+          color:C_COLOR[r.cat]||'#6b7591',
+          accId:finalCardId?null:finalAccId,
+          cardId:finalCardId||null,
+          parcelado:true,totalParcelas:totalParts,parcelaAtual:partNum
+        });
+        totalInstallments++;
+      }
+    }
   });
+
   saveDB();renderAll();
   const dups=_pendRows.filter(r=>r._dup).length;
-  const dest=_importCardId?('cartão '+( DB.cards.find(c=>c.id===_importCardId)?.name||'')):_importAccId?('conta '+(DB.accounts.find(a=>a.id===_importAccId)?.name||'')):'';
-  document.getElementById('impSuccT').textContent=`${toImp.length} transação${toImp.length!==1?'ões':''} importada${toImp.length!==1?'s':''}!`;
-  document.getElementById('impSuccS').textContent=`${toImp.length} adicionada${toImp.length!==1?'s':''}${dups?` · ${dups} duplicada${dups!==1?'s':''} ignorada${dups!==1?'s':''}`:''}.${dest?' Vinculadas ao '+dest+'.':''}`;
+  const destCard=finalCardId?DB.cards.find(c=>c.id===finalCardId):null;
+  const destAcc=finalAccId?DB.accounts.find(a=>a.id===finalAccId):null;
+  const destName=destCard?destCard.name:destAcc?destAcc.name:'';
+
+  document.getElementById('impSuccT').textContent=`${totalImported} transação${totalImported!==1?'ões':''} importada${totalImported!==1?'s':''}!`;
+  let msg=`${totalImported} adicionada${totalImported!==1?'s':''}`;
+  if(dups) msg+=` · ${dups} duplicada${dups!==1?'s':''} ignorada${dups!==1?'s':''}`;
+  if(destName) msg+=` · Vinculadas: ${destName}`;
+  if(totalInstallments>0) msg+=` · ${totalInstallments} parcela${totalInstallments!==1?'s':''} futuras criadas automaticamente`;
+  document.getElementById('impSuccS').textContent=msg+'.';
+
   _importCardId=null;
   _importAccId=null;
   impGoStep(4);
