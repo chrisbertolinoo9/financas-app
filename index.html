@@ -863,9 +863,9 @@ select.fi option{background:var(--card2);color:var(--text);}
       <div class="fg"><label class="fl">Seguro Mensal (R$)</label><input class="fi" id="lnInsurance" type="number" placeholder="70.94" step="0.01"></div>
       <div class="fg"><label class="fl">Taxa Operacional (R$)</label><input class="fi" id="lnOpFee" type="number" placeholder="25.00" step="0.01"></div>
     </div>
-    <div class="md-actions">
-      <button class="md-cancel" onclick="closeLoanModal()">Cancelar</button>
-      <button class="md-save" onclick="saveLoan()">Salvar</button>
+    <div class="md-foot">
+      <button class="bc" onclick="closeLoanModal()">Cancelar</button>
+      <button class="bs acc" onclick="saveLoan()">Salvar Financiamento</button>
     </div>
   </div>
 </div>
@@ -889,8 +889,8 @@ select.fi option{background:var(--card2);color:var(--text);}
       </div>
     </div>
     <div id="simResult"></div>
-    <div class="md-actions">
-      <button class="md-cancel" onclick="closeLoanSim()">Fechar</button>
+    <div class="md-foot">
+      <button class="bc" onclick="closeLoanSim()">Fechar</button>
     </div>
   </div>
 </div>
@@ -3894,6 +3894,7 @@ function openLoanModal(id){
 function closeLoanModal(){ document.getElementById('loanOv').classList.remove('on'); }
 
 function saveLoan(){
+  try{
   const id=document.getElementById('loanEditId').value||('l'+Date.now());
   const name=document.getElementById('lnName').value.trim();
   if(!name){ toast('Informe o nome do financiamento','#ef4444'); return; }
@@ -3919,6 +3920,7 @@ function saveLoan(){
   closeLoanModal();
   renderLoans();
   toast('✓ Financiamento salvo!','#22c55e');
+  }catch(e){ console.error('saveLoan error:',e); toast('Erro ao salvar: '+e.message,'#ef4444'); }
 }
 
 function deleteLoan(id){
