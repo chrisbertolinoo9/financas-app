@@ -407,6 +407,19 @@ select.fi option{background:var(--card2);color:var(--text);}
 /* ── CLR BTN (só contas e cartões) ──────────────── */
 .clr-btn{padding:7px 12px;background:transparent;border:1px solid rgba(239,68,68,.18);border-radius:8px;color:var(--muted);font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .18s;}
 .clr-btn:hover{color:var(--red);border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.06);}
+/* ── IMPORT DESTINATION ── */
+.imp-dest-opt{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 12px;border-radius:8px;
+  border:1.5px solid var(--border);
+  background:var(--bg);
+  font-size:11px;font-weight:600;color:var(--muted);
+  cursor:pointer;transition:all .18s;
+}
+.imp-dest-opt:hover{border-color:var(--border2);color:var(--text);}
+.imp-dest-opt.on{border-color:var(--accent);background:var(--glow);color:var(--accent);}
+.imp-dest-opt.card-opt.on{border-color:var(--purple);background:rgba(139,92,246,.1);color:var(--purple);}
+.imp-dest-opt.acc-opt.on{border-color:var(--green);background:rgba(34,197,94,.1);color:var(--green);}
 </style>
 </head>
 <body>
@@ -640,8 +653,13 @@ select.fi option{background:var(--card2);color:var(--text);}
           <option value="__new__">＋ Nova categoria...</option>
         </select>
       </div>
-      <div class="fg"><label class="fl">Conta</label>
+      <div class="fg" id="txAccField">
+        <label class="fl" id="txAccLbl">Conta</label>
         <select class="fi" id="txAcc"><option value="">— Selecione —</option></select>
+      </div>
+      <div class="fg" id="txCardField" style="display:none;">
+        <label class="fl">Cartão</label>
+        <select class="fi" id="txCard"><option value="">— Selecione —</option></select>
       </div>
     </div>
     <div class="md-foot">
@@ -941,6 +959,16 @@ select.fi option{background:var(--card2);color:var(--text);}
           <div class="dfmts"><span class="dfmt">PDF</span><span class="dfmt">Múltiplos</span></div>
         </div>
       </div>
+      <!-- Destino da importação -->
+      <div id="impDestinoBox" style="margin-bottom:12px;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:11px;">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">📌 Vincular ao</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="impDestinoOpts">
+          <div class="imp-dest-opt on" data-type="none" data-id="" onclick="selImportDest(this,'none','')">
+            <span>📋</span> Sem vínculo
+          </div>
+        </div>
+      </div>
+
       <div id="thumbArea" style="display:none;margin-top:4px;">
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;">Arquivos selecionados</div>
         <div class="thumbs" id="thumbsCont"></div>
@@ -948,7 +976,6 @@ select.fi option{background:var(--card2);color:var(--text);}
       </div>
       <div class="md-foot" style="margin-top:16px;">
         <button class="bc" onclick="closeImport()">Cancelar</button>
-        <button onclick="showGeminiConfig()" style="padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--muted);font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;" title="Configurar chave Gemini">🔑 Chave IA</button>
         <button class="bs acc" id="impAnalyzeBtn" onclick="runAI()" disabled>✨ Analisar com IA</button>
       </div>
     </div>
@@ -1664,36 +1691,57 @@ function saveTransf(){
 // CARD IMPORT (vincula ao cartão certo)
 // ════════════════════════════════════════════════
 let _importCardId=null;
+let _importAccId=null;
+
 function openCardImport(cardId){
   _importCardId=cardId;
+  _importAccId=null;
   closeInv();
-  openImport();
+  openImport(); // openImport auto-selects the card in destination picker
 }
 
-// Override doImport to respect _importCardId
-const _origDoImport=doImport;
+function openAccImport(accId){
+  _importAccId=accId;
+  _importCardId=null;
+  openImport(); // openImport auto-selects the account in destination picker
+}
+
 function doImport(){
   const toImp=_pendRows.filter(r=>r._sel);
   if(!toImp.length){toast('Selecione ao menos uma transação','var(--yellow)');return;}
   toImp.forEach(r=>{
     const year=curYear,month=(curMonth+1).toString().padStart(2,'0');
     const dateParts=(r.date||'').split('/');
-    const dateISO=dateParts.length===2?`${year}-${month}-${dateParts[0].padStart(2,'0')}`:todayISO();
+    // Try to parse date from DD/MM format
+    let dateISO;
+    if(dateParts.length===2){
+      const day=dateParts[0].padStart(2,'0');
+      const mon=dateParts[1]?dateParts[1].padStart(2,'0'):month;
+      dateISO=`${year}-${mon}-${day}`;
+    } else {
+      dateISO=todayISO();
+    }
     DB.transactions.unshift({
       id:'tx'+Date.now()+Math.random(),
-      name:r.name,cat:r.cat,type:r.type,val:r.val,
-      dateISO,date:isoToDisplay(dateISO),
+      name:r.name,
+      cat:r.cat,
+      type:r.type,
+      val:r.val,
+      dateISO,
+      date:isoToDisplay(dateISO),
       icon:r.icon||C_ICON[r.cat]||'💰',
       color:C_COLOR[r.cat]||'#6b7591',
-      accId:null,
-      cardId:_importCardId||null  // vincula ao cartão se veio de lá
+      accId:_importAccId||null,
+      cardId:_importCardId||null
     });
   });
   saveDB();renderAll();
   const dups=_pendRows.filter(r=>r._dup).length;
+  const dest=_importCardId?('cartão '+( DB.cards.find(c=>c.id===_importCardId)?.name||'')):_importAccId?('conta '+(DB.accounts.find(a=>a.id===_importAccId)?.name||'')):'';
   document.getElementById('impSuccT').textContent=`${toImp.length} transação${toImp.length!==1?'ões':''} importada${toImp.length!==1?'s':''}!`;
-  document.getElementById('impSuccS').textContent=`${toImp.length} adicionada${toImp.length!==1?'s':''}${dups?` · ${dups} duplicada${dups!==1?'s':''} ignorada${dups!==1?'s':''}`:''}.${_importCardId?' Vinculadas ao cartão.':''}`;
+  document.getElementById('impSuccS').textContent=`${toImp.length} adicionada${toImp.length!==1?'s':''}${dups?` · ${dups} duplicada${dups!==1?'s':''} ignorada${dups!==1?'s':''}`:''}.${dest?' Vinculadas ao '+dest+'.':''}`;
   _importCardId=null;
+  _importAccId=null;
   impGoStep(4);
 }
 
@@ -1906,6 +1954,19 @@ function openTxModal(editId=null, preCardId=null, preAccId=null){
   document.getElementById('txDate').value=todayISO();
   const accSel=document.getElementById('txAcc');
   accSel.innerHTML='<option value="">— Selecione —</option>'+DB.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  // Populate card selector
+  const cardSel=document.getElementById('txCard');
+  if(cardSel){
+    cardSel.innerHTML='<option value="">— Selecione —</option>'+DB.cards.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  }
+
+  const hasCard=!!preCardId;
+  // Show/hide account vs card field
+  const accF=document.getElementById('txAccField');
+  const cardF=document.getElementById('txCardField');
+  if(accF) accF.style.display=hasCard?'none':'block';
+  if(cardF) cardF.style.display=hasCard?'block':'none';
+
   if(editId){
     const t=DB.transactions.find(x=>x.id===editId);
     if(!t) return;
@@ -1915,14 +1976,22 @@ function openTxModal(editId=null, preCardId=null, preAccId=null){
     document.getElementById('txVal').value=t.val;
     document.getElementById('txDate').value=t.dateISO;
     document.getElementById('txCat').value=t.cat;
+    // Show correct field for account or card
+    const hasCardEdit=!!t.cardId;
+    if(accF) accF.style.display=hasCardEdit?'none':'block';
+    if(cardF) cardF.style.display=hasCardEdit?'block':'none';
     document.getElementById('txAcc').value=t.accId||'';
+    if(cardSel) cardSel.value=t.cardId||'';
   } else {
     document.getElementById('txMdTitle').textContent='Nova Transação';
     setTxTab('receita');
     document.getElementById('txDesc').value='';
     document.getElementById('txVal').value='';
     if(preAccId) document.getElementById('txAcc').value=preAccId;
-    if(preCardId){ setTxTab('despesa'); }
+    if(preCardId){
+      setTxTab('despesa');
+      if(cardSel) cardSel.value=preCardId;
+    }
   }
   document.getElementById('txOv').classList.add('on');
 }
@@ -1945,7 +2014,8 @@ function saveTx(){
   if(!desc||!val||!dateISO){ toast('Preencha todos os campos','var(--yellow)'); return; }
   const type=_txTab==='transferencia'?'despesa':_txTab;
   learnCategory(desc,cat);
-  const obj={id:editId||'tx'+Date.now(),name:desc,cat,type,val,dateISO,date:isoToDisplay(dateISO),icon:C_ICON[cat]||'💰',color:C_COLOR[cat]||'#6b7591',accId:accId||null,cardId:null};
+  const cardId=document.getElementById('txCard')?.value||null;
+  const obj={id:editId||'tx'+Date.now(),name:desc,cat,type,val,dateISO,date:isoToDisplay(dateISO),icon:C_ICON[cat]||'💰',color:C_COLOR[cat]||'#6b7591',accId:cardId?null:(accId||null),cardId:cardId||null};
   if(editId){ const i=DB.transactions.findIndex(x=>x.id===editId); if(i>=0)DB.transactions[i]=obj; }
   else DB.transactions.unshift(obj);
   saveDB(); renderAll(); closeTx();
@@ -2117,8 +2187,39 @@ function confirmDel(){
 // IMPORT
 // ════════════════════════════════════════════════
 let _impImgs=[],_pendRows=[];
-function openImport(){ document.getElementById('impOv').classList.add('on'); }
-function closeImport(){ document.getElementById('impOv').classList.remove('on'); resetImport(); _importCardId=null; }
+function openImport(){
+  document.getElementById('impOv').classList.add('on');
+  // Populate destination options
+  const opts=document.getElementById('impDestinoOpts');
+  if(!opts) return;
+  let html_opts=`<div class="imp-dest-opt on" data-type="none" data-id="" onclick="selImportDest(this,'none','')"><span>📋</span> Sem vínculo</div>`;
+  // Cards
+  if(DB.cards.length){
+    html_opts+=DB.cards.map(c=>`<div class="imp-dest-opt card-opt" data-type="card" data-id="${c.id}" onclick="selImportDest(this,'card','${c.id}')"><span>💳</span> ${c.name}</div>`).join('');
+  }
+  // Accounts
+  if(DB.accounts.filter(a=>!a.archived).length){
+    html_opts+=DB.accounts.filter(a=>!a.archived).map(a=>`<div class="imp-dest-opt acc-opt" data-type="acc" data-id="${a.id}" onclick="selImportDest(this,'acc','${a.id}')"><span>🏦</span> ${a.name}</div>`).join('');
+  }
+  opts.innerHTML=html_opts;
+  // If coming from card/acc, pre-select it
+  if(_importCardId){
+    const btn=opts.querySelector(`[data-type="card"][data-id="${_importCardId}"]`);
+    if(btn){ opts.querySelectorAll('.imp-dest-opt').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); }
+  } else if(_importAccId){
+    const btn=opts.querySelector(`[data-type="acc"][data-id="${_importAccId}"]`);
+    if(btn){ opts.querySelectorAll('.imp-dest-opt').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); }
+  }
+}
+
+function selImportDest(el,type,id){
+  document.querySelectorAll('.imp-dest-opt').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  if(type==='card'){ _importCardId=id; _importAccId=null; }
+  else if(type==='acc'){ _importAccId=id; _importCardId=null; }
+  else { _importCardId=null; _importAccId=null; }
+}
+function closeImport(){ document.getElementById('impOv').classList.remove('on'); resetImport(); _importCardId=null; _importAccId=null; }
 function resetImport(){
   _impImgs=[];_pendRows=[];impGoStep(1);
   document.getElementById('thumbArea').style.display='none';
@@ -2398,21 +2499,7 @@ function saveNewCat(rowIdx){
 function rmRow(i){_pendRows.splice(i,1);renderReview();updImpBtn();}
 function selAll(s){_pendRows.forEach(r=>r._sel=s);renderReview();updImpBtn();}
 function updImpBtn(){const sel=_pendRows.filter(r=>r._sel).length;document.getElementById('impDoBtn').textContent=`Importar ${sel} transação${sel!==1?'ões':''}`;}
-function doImport(){
-  const toImp=_pendRows.filter(r=>r._sel);
-  if(!toImp.length){toast('Selecione ao menos uma transação','var(--yellow)');return;}
-  toImp.forEach(r=>{
-    const year=curYear,month=(curMonth+1).toString().padStart(2,'0');
-    const dateParts=(r.date||'').split('/');
-    const dateISO=dateParts.length===2?`${year}-${month}-${dateParts[0].padStart(2,'0')}`:todayISO();
-    DB.transactions.unshift({id:'tx'+Date.now()+Math.random(),name:r.name,cat:r.cat,type:r.type,val:r.val,dateISO,date:isoToDisplay(dateISO),icon:r.icon||C_ICON[r.cat]||'💰',color:C_COLOR[r.cat]||'#6b7591',accId:null,cardId:null});
-  });
-  saveDB();renderAll();
-  const dups=_pendRows.filter(r=>r._dup).length;
-  document.getElementById('impSuccT').textContent=`${toImp.length} transação${toImp.length!==1?'ões':''} importada${toImp.length!==1?'s':''}!`;
-  document.getElementById('impSuccS').textContent=`${toImp.length} adicionada${toImp.length!==1?'s':''}${dups?` · ${dups} duplicada${dups!==1?'s':''} ignorada${dups!==1?'s':''}`:''}.`;
-  impGoStep(4);
-}
+// doImport unified above
 
 // ════════════════════════════════════════════════
 // GEMINI KEY MANAGEMENT (gratuito)
