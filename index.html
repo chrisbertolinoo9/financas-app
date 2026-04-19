@@ -2524,14 +2524,31 @@ function savePlan(){
 let _delType=null,_delId=null;
 function confirmDelItem(type,id,label){
   _delType=type;_delId=id;
-  document.getElementById('delMsg').textContent=`Excluir ${label}? Esta ação não pode ser desfeita.`;
+  let msg=`Excluir ${label}? Esta ação não pode ser desfeita.`;
+  // Warn about linked transactions when deleting a card or account
+  if(type==='card'){
+    const count=DB.transactions.filter(t=>t.cardId===id).length;
+    if(count>0) msg=`Excluir ${label}? Isso também removerá ${count} lançamento${count!==1?'s':''} vinculado${count!==1?'s':''} a este cartão. Esta ação não pode ser desfeita.`;
+  } else if(type==='acc'){
+    const count=DB.transactions.filter(t=>t.accId===id).length;
+    if(count>0) msg=`Excluir ${label}? Isso também removerá ${count} lançamento${count!==1?'s':''} vinculado${count!==1?'s':''} a esta conta. Esta ação não pode ser desfeita.`;
+  }
+  document.getElementById('delMsg').textContent=msg;
   document.getElementById('delOv').classList.add('on');
 }
 function closeDel(){ document.getElementById('delOv').classList.remove('on'); }
 function confirmDel(){
   if(_delType==='tx') DB.transactions=DB.transactions.filter(x=>x.id!==_delId);
-  else if(_delType==='acc') DB.accounts=DB.accounts.filter(x=>x.id!==_delId);
-  else if(_delType==='card') DB.cards=DB.cards.filter(x=>x.id!==_delId);
+  else if(_delType==='acc'){
+    DB.accounts=DB.accounts.filter(x=>x.id!==_delId);
+    // Remove all transactions linked to this account
+    DB.transactions=DB.transactions.filter(x=>x.accId!==_delId);
+  }
+  else if(_delType==='card'){
+    DB.cards=DB.cards.filter(x=>x.id!==_delId);
+    // Remove all transactions linked to this card
+    DB.transactions=DB.transactions.filter(x=>x.cardId!==_delId);
+  }
   saveDB(); renderAll(); closeDel();
   if(_invCardId) openInvoice(_invCardId);
   toast('✓ Excluído com sucesso!','#22c55e');
