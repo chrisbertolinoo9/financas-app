@@ -1,0 +1,21 @@
+{
+  "name": "FinançasPro",
+  "short_name": "FinançasPro",
+  "description": "Controle financeiro pessoal inteligente",
+  "start_url": "/financas-app/",
+  "scope": "/financas-app/",
+  "display": "standalone",
+  "background_color": "#0b0e18",
+  "theme_color": "#0b0e18",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='115' fill='%230b0e18'/><text y='400' x='60' font-size='400'>💰</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity"],
+  "lang": "pt-BR"
+}
