@@ -1416,9 +1416,18 @@ Gere 3-4 insights relevantes e práticos. Seja direto, específico e útil. Tipo
 // ════════════════════════════════════════════════
 // ACCOUNTS
 // ════════════════════════════════════════════════
+function computeAccBalance(acc){
+  const txs=DB.transactions.filter(t=>t.accId===acc.id);
+  const rec=txs.filter(t=>t.type==='receita').reduce((s,t)=>s+t.val,0);
+  const desp=txs.filter(t=>t.type==='despesa').reduce((s,t)=>s+t.val,0);
+  return (acc.initialBalance||0)+rec-desp;
+}
+
 function renderAccounts(){
   const ACC_ICONS={corrente:'🏦',poupanca:'🐷',investimento:'📈',carteira:'👛',outro:'💳'};
   const active=DB.accounts.filter(a=>!a.archived);
+  // Compute real balances
+  active.forEach(a=>{ a.balance=computeAccBalance(a); });
   const totalSaldo=active.reduce((s,a)=>s+a.balance,0);
 
   // Total bar
@@ -1527,19 +1536,30 @@ function renderAccDetail(){
   const a=DB.accounts.find(x=>x.id===_detAccId);
   if(!a) return;
 
+  // Calculate real balance: initial + all receipts - all expenses
+  const allTx=DB.transactions.filter(t=>t.accId===a.id);
+  const totalRec=allTx.filter(t=>t.type==='receita').reduce((s,t)=>s+t.val,0);
+  const totalDesp=allTx.filter(t=>t.type==='despesa').reduce((s,t)=>s+t.val,0);
+  const realBalance=(a.initialBalance||0)+totalRec-totalDesp;
+
+  // Update stored balance to reflect reality
+  if(Math.abs(a.balance-realBalance)>0.01){
+    a.balance=realBalance;
+    saveDB();
+  }
+
   // Header
   document.getElementById('adIcon').textContent=ACC_ICONS_MAP[a.type]||'🏦';
   document.getElementById('adIcon').style.background=(a.color||'#6366f1')+'22';
   document.getElementById('adType').textContent=ACC_TYPE_LBL[a.type]||a.type;
   const balEl=document.getElementById('adBal');
-  balEl.textContent='R$ '+fmt(a.balance);
-  balEl.style.color=a.balance>=0?'var(--green)':'var(--red)';
+  balEl.textContent='R$ '+fmt(realBalance);
+  balEl.style.color=realBalance>=0?'var(--green)':'var(--red)';
 
   // Account selector
   document.getElementById('adAccSel').innerHTML=DB.accounts.filter(x=>!x.archived).map(x=>`<option value="${x.id}"${x.id===_detAccId?' selected':''}>${x.name}</option>`).join('');
 
   // Stats
-  const allTx=DB.transactions.filter(t=>t.accId===a.id);
   const monthTx=allTx.filter(inCurMonth);
   const despTx=allTx.filter(t=>t.type==='despesa');
   const recTx=allTx.filter(t=>t.type==='receita');
