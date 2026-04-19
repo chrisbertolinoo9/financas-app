@@ -1862,9 +1862,10 @@ function renderCards(){
   el.innerHTML=DB.cards.length?DB.cards.map(c=>{
     const spent=cardMonthSpend(c.id);
     const isPrep=c.type==='prepago';
-    const limitBase=isPrep?(c.balance||c.limit):c.limit;
+    const limitBase=isPrep?(c.balance||c.limit||0):c.limit;
     const pct=limitBase>0?Math.min(Math.round(spent/limitBase*100),100):0;
     const avail=Math.max(limitBase-spent,0);
+    const availLabel=isPrep?'Saldo restante':'Disponível';
     return `<div class="cci" style="position:relative;" id="cc-${c.id}">
       <div onclick="openInvoice('${c.id}')" style="flex:1;">
         <div class="cc-top">
@@ -1877,7 +1878,7 @@ function renderCards(){
           <button class="menu-btn" onclick="event.stopPropagation();toggleCardMenu('${c.id}')" title="Opções" style="margin-left:4px;">⋯</button>
         </div>
         <div class="cc-bar-bg"><div class="cc-bar-fill" style="width:${pct}%;background:${c.color||'#8b5cf6'}"></div></div>
-        <div class="cc-lim">${pct}% — Disponível R$ ${fmt(avail)}</div>
+        <div class="cc-lim">${pct}% — ${availLabel} R$ ${fmt(avail)}</div>
       </div>
       <div id="ccm-${c.id}" class="popup-menu" style="display:none;top:36px;right:36px;" onclick="event.stopPropagation()">
         <div class="pm-item" onclick="closeAllMenus();openCardModal('${c.id}')"><span class="pm-ico">✏️</span>Editar cartão</div>
@@ -1935,16 +1936,46 @@ function openInvoice(cardId){
   const pct=card.limit>0?Math.min(Math.round(spent/card.limit*100),100):0;
 
   document.getElementById('invTitle').textContent='Fatura — '+card.name;
-  // Payment is due in the NEXT month (e.g. April invoice → paid in May on due day)
+  const isPrep=card.type==='prepago';
+  // Todos os cartões mostram o mesmo formato: Mês Ano · Vence DD/Mmm/AAAA
   const dueMonth=(curMonth+1)>11?0:curMonth+1;
   const dueYear=(curMonth+1)>11?curYear+1:curYear;
   const dueMonthName=MONTHS[dueMonth];
   document.getElementById('invSubtitle').textContent=
     MONTHS[curMonth]+' '+curYear+' · Vence '+card.due+'/'+dueMonthName.slice(0,3)+'/'+dueYear;
-  document.getElementById('invSummaryBox').innerHTML=`
-    <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Fatura</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--purple);">R$ ${fmt(spent)}</div></div>
-    <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Utilizado</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:${pct>80?'var(--red)':'var(--yellow)'};">${pct}%</div></div>
-    <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Disponível</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--green);">R$ ${fmt(Math.max((card.type==='prepago'?(card.balance||card.limit):card.limit)-spent,0))}</div></div>`;
+  if(isPrep){
+    // Pré-pago: mostra Saldo Carregado / Gasto / Saldo Restante
+    const loaded=card.balance||card.limit||0;
+    const restante=Math.max(loaded-spent,0);
+    document.getElementById('invSummaryBox').innerHTML=`
+      <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Saldo Carregado</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--blue);">R$ ${fmt(loaded)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Gasto no Mês</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--red);">R$ ${fmt(spent)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Saldo Restante</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:${restante>0?'var(--green)':'var(--yellow)'};">R$ ${fmt(restante)}</div>
+      </div>`;
+  } else {
+    // Crédito: mostra Fatura / Utilizado % / Disponível
+    document.getElementById('invSummaryBox').innerHTML=`
+      <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Fatura</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--purple);">R$ ${fmt(spent)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Utilizado</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:${pct>80?'var(--red)':'var(--yellow)'};">${pct}%</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Disponível</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--green);">R$ ${fmt(Math.max(card.limit-spent,0))}</div>
+      </div>`;
+  }
 
   const tl=document.getElementById('invTxList');
   tl.innerHTML=txs.length?txs.map(t=>`
