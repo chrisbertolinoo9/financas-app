@@ -1352,10 +1352,8 @@ async function loadCloudData(uid){
       const data=snap.data();
       if(data.db){
         DB=JSON.parse(data.db);
-        if(!Array.isArray(DB.accounts)) DB.accounts=[];
-        if(!Array.isArray(DB.cards)) DB.cards=[];
-        if(!Array.isArray(DB.planGoals)) DB.planGoals=[];
         localStorage.setItem(STORE_KEY,JSON.stringify(DB));
+        toast('✓ Dados carregados da nuvem ☁️','#22c55e');
       }
     }
   }catch(e){ console.warn('Load cloud error:',e); }
@@ -3369,6 +3367,9 @@ async function doRegister(){
   }
 }
 function enterApp(name){
+  // Limpa QUALQUER versão antiga do banco ao fazer login
+  ['fp_db','fp_db_v1','fp_db_v2','financas_db','fp_data'].forEach(k=>localStorage.removeItem(k));
+
   const ls=document.getElementById('loginScreen');
   ls.style.transition='opacity .4s,transform .4s';ls.style.opacity='0';ls.style.transform='scale(1.03)';
   setTimeout(()=>{
@@ -3378,9 +3379,7 @@ function enterApp(name){
     requestAnimationFrame(()=>app.style.opacity='1');
     document.getElementById('sbName').textContent=name;
     document.getElementById('monthLbl').textContent=MONTHS[curMonth]+' '+curYear;
-    // Só carrega do localStorage se ainda não tiver dados da nuvem
-    if(!DB.transactions || DB.transactions.length===0) loadDB();
-    renderAll();
+    loadDB(); renderAll();
     toast('Bem-vindo, '+name.split(' ')[0]+'! 👋','#22c55e');
   },380);
 }
