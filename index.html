@@ -1442,8 +1442,20 @@ async function loadCloudData(uid){
     if(snap.exists()){
       const data=snap.data();
       if(data.db){
+        // Preserva dados locais que possam ter sido adicionados antes da nuvem responder
+        const localLoans = Array.isArray(DB.loans) ? [...DB.loans] : [];
         DB=JSON.parse(data.db);
+        // Garante campos obrigatórios mesmo em DBs antigos da nuvem
+        if(!Array.isArray(DB.accounts)) DB.accounts = [];
+        if(!Array.isArray(DB.cards)) DB.cards = [];
+        if(!Array.isArray(DB.planGoals)) DB.planGoals = [];
+        if(!Array.isArray(DB.loans)) DB.loans = [];
+        // Mescla loans locais que não estejam na nuvem (evita perda de dados recentes)
+        localLoans.forEach(ll=>{
+          if(!DB.loans.find(cl=>cl.id===ll.id)) DB.loans.push(ll);
+        });
         localStorage.setItem(STORE_KEY,JSON.stringify(DB));
+        renderAll();
         toast('✓ Dados carregados da nuvem ☁️','#22c55e');
       }
     }
@@ -3713,8 +3725,12 @@ function renderLoans(){
   const el=document.getElementById('loansList');
   const empty=document.getElementById('loansEmpty');
   if(!el) return;
-  if(DB.loans.length===0){ el.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display='none';
+  if(DB.loans.length===0){
+    el.innerHTML='';
+    if(empty) empty.style.display='block';
+    return;
+  }
+  if(empty) empty.style.display='none';
 
   el.innerHTML = DB.loans.map(l=>{
     const paidMonths = l.currentMonth||0;
@@ -3857,9 +3873,20 @@ function openLoanModal(id){
       document.getElementById('lnOpFee').value=l.opFee||'';
     }
   } else {
-    // Pre-fill with CAIXA data as example (clear all)
-    ['lnName','lnBank','lnContract','lnFinanced','lnMonths','lnRate','lnStart','lnCurrentMonth','lnDebt','lnInstallment','lnInsurance','lnOpFee'].forEach(f=>{ document.getElementById(f).value=''; });
+    // Limpa campos
+    document.getElementById('lnName').value='Apartamento CAIXA';
+    document.getElementById('lnBank').value='Caixa Econômica Federal';
+    document.getElementById('lnContract').value='144442663854-1';
+    document.getElementById('lnFinanced').value='360000';
+    document.getElementById('lnMonths').value='420';
+    document.getElementById('lnRate').value='10';
     document.getElementById('lnSystem').value='SAC';
+    document.getElementById('lnStart').value='2026-04-19';
+    document.getElementById('lnCurrentMonth').value='1';
+    document.getElementById('lnDebt').value='360651.23';
+    document.getElementById('lnInstallment').value='3196.29';
+    document.getElementById('lnInsurance').value='70.94';
+    document.getElementById('lnOpFee').value='25';
   }
   ov.classList.add('on');
 }
