@@ -256,8 +256,8 @@ select.fi option{background:var(--card2);color:var(--text);}
 .is-item{text-align:center;flex:1;}
 .is-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;}
 .is-lbl{font-size:9px;color:var(--muted);margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
-.rh{display:grid;grid-template-columns:24px 1fr 110px 78px 100px 68px 28px;gap:5px;padding:6px 9px;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);margin-bottom:2px;}
-.rr{display:grid;grid-template-columns:24px 1fr 110px 78px 100px 68px 28px;gap:5px;align-items:center;padding:7px 9px;border-radius:7px;border:1px solid transparent;transition:all .13s;margin-bottom:2px;}
+.rh{display:grid;grid-template-columns:24px 1fr 110px 70px 65px 90px 68px 28px;gap:5px;padding:6px 9px;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);margin-bottom:2px;}
+.rr{display:grid;grid-template-columns:24px 1fr 110px 70px 65px 90px 68px 28px;gap:5px;align-items:center;padding:7px 9px;border-radius:7px;border:1px solid transparent;transition:all .13s;margin-bottom:2px;}
 .rr:hover{background:var(--bg3);border-color:var(--border);}
 .rr.dup{background:rgba(239,68,68,.04);border-color:rgba(239,68,68,.14);}
 .rr.excl{opacity:.35;}
@@ -999,7 +999,7 @@ select.fi option{background:var(--card2);color:var(--text);}
         </div>
       </div>
       <div style="max-height:320px;overflow-y:auto;">
-        <div class="rh"><div></div><div>Descrição</div><div>Categoria</div><div>Data</div><div>Valor</div><div>Status</div><div></div></div>
+        <div class="rh"><div></div><div>Descrição</div><div>Categoria</div><div>Data</div><div>Valor</div><div>Parcela</div><div>Status</div><div></div></div>
         <div id="revList"></div>
       </div>
       <div class="md-foot">
@@ -1722,7 +1722,11 @@ function doImport(){
 
   toImp.forEach(r=>{
     // ── Parse instalment pattern e.g. "Ebn Playstation 2/4" ──
-    const instMatch=r.name.match(/^(.+?)\s+(\d+)\/(\d+)$/);
+    // Use manually entered parcela (_parcela) OR auto-detect from name
+    const manualParcela=r._parcela&&r._parcela.includes('/')?r._parcela:null;
+    const instMatch=manualParcela
+      ?[null, r.name.replace(/\s+\d+\/\d+$/, '').trim(), ...manualParcela.split('/')]
+      :r.name.match(/^(.+?)\s+(\d+)\/(\d+)$/);
     const baseName=instMatch?instMatch[1].trim():r.name;
     const curPart=instMatch?parseInt(instMatch[2]):1;
     const totalParts=instMatch?parseInt(instMatch[3]):1;
@@ -2492,19 +2496,28 @@ function buildReview(extracted){
   updImpBtn();
 }
 function renderReview(){
-  document.getElementById('revList').innerHTML=_pendRows.map((r,i)=>`
+  document.getElementById('revList').innerHTML=_pendRows.map((r,i)=>{
+    // Detect instalment from name e.g. "Produto 2/4"
+    const instMatch=r.name.match(/\s+(\d+)\/(\d+)$/);
+    const parcelaVal=r._parcela||(instMatch?instMatch[1]+'/'+instMatch[2]:'');
+    const parcelaDisplay=parcelaVal?
+      `<input class="ri" value="${parcelaVal}" placeholder="ex: 2/4" onchange="updRow(${i},'_parcela',this.value)" style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--cyan);">`
+      :`<input class="ri" value="" placeholder="—" onchange="updRow(${i},'_parcela',this.value)" style="text-align:center;color:var(--muted);font-size:11px;">`;
+    return `
     <div class="rr ${r._dup?'dup':''} ${!r._sel?'excl':''}" id="rv${i}">
       <div class="rck ${r._sel?'on':''}" onclick="togRow(${i})">${r._sel?'✓':''}</div>
       <input class="ri" value="${r.name}" onchange="updRow(${i},'name',this.value)">
       <select class="ri" onchange="onCatChange(this,${i})">${getAllCats().map(c=>`<option${c===r.cat?' selected':''}>${c}</option>`).join('')}<option value="__new__">＋ Nova categoria...</option></select>
-      <input class="ri" value="${r.date||''}" onchange="updRow(${i},'date',this.value)" style="max-width:70px;">
+      <input class="ri" value="${r.date||''}" onchange="updRow(${i},'date',this.value)" style="max-width:65px;">
       <div class="rvs ${r.type==='receita'?'p':'n'}">
         <span>${r.type==='receita'?'+':'-'}</span>
         <input class="ri" type="number" value="${r.val}" onchange="updRow(${i},'val',parseFloat(this.value)||0)" style="font-family:'JetBrains Mono',monospace;font-weight:700;color:inherit;">
       </div>
+      ${parcelaDisplay}
       <div>${r._dup?'<span class="dup-b">⚠ Dup</span>':'<span class="new-b">✓ Nova</span>'}</div>
       <button class="act-btn del" onclick="rmRow(${i})">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 function togRow(i){_pendRows[i]._sel=!_pendRows[i]._sel;renderReview();updImpBtn();}
 function updRow(i,f,v){
