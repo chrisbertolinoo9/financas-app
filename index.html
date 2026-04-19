@@ -504,6 +504,54 @@ select.fi option{background:var(--card2);color:var(--text);}
   </div>
 </nav>
 
+<!-- MOBILE BOTTOM NAV -->
+<nav id="mobileNav">
+  <button class="mn-item on" id="mn-dashboard" onclick="gv('dashboard');setMobileNav('dashboard')">
+    <div class="mn-ico">⊞</div>
+    <span>Dashboard</span>
+  </button>
+  <button class="mn-item" id="mn-contas" onclick="gv('contas');setMobileNav('contas')">
+    <div class="mn-ico">🏦</div>
+    <span>Contas</span>
+  </button>
+  <button class="mn-item" id="mn-transacoes" onclick="gv('transacoes');setMobileNav('transacoes')">
+    <div class="mn-ico" style="position:relative;">⇄<span class="mn-badge" id="mnTxBadge" style="display:none;">0</span></div>
+    <span>Lançamentos</span>
+  </button>
+  <button class="mn-item" id="mn-cartoes" onclick="gv('cartoes');setMobileNav('cartoes')">
+    <div class="mn-ico">▭</div>
+    <span>Cartões</span>
+  </button>
+  <button class="mn-item" id="mn-mais" onclick="toggleMobileMenu()">
+    <div class="mn-ico">☰</div>
+    <span>Mais</span>
+  </button>
+</nav>
+
+<!-- MOBILE MORE MENU -->
+<div id="mobileMoreMenu" style="display:none;position:fixed;bottom:65px;left:0;right:0;background:var(--card2);border-top:1px solid var(--border);border-radius:20px 20px 0 0;z-index:149;padding:16px;animation:mdIn .2s ease;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+    <button onclick="gv('planejamento');setMobileNav('planejamento');closeMobileMenu()" style="padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <span style="font-size:22px;">◎</span>Planejamento
+    </button>
+    <button onclick="gv('relatorios');setMobileNav('relatorios');closeMobileMenu()" style="padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <span style="font-size:22px;">↗</span>Relatórios
+    </button>
+    <button onclick="openImport();closeMobileMenu()" style="padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <span style="font-size:22px;">📷</span>Importar
+    </button>
+    <button onclick="openTxModal();closeMobileMenu()" style="padding:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:12px;color:#fff;font-family:'Sora',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <span style="font-size:22px;">＋</span>Nova Transação
+    </button>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:10px;border:1px solid var(--border);">
+    <div class="sb-av" style="width:36px;height:36px;border-radius:10px;font-size:14px;">CB</div>
+    <div style="flex:1;"><div style="font-size:13px;font-weight:700;" id="mobileUname">Christian B.</div><div style="font-size:10px;color:var(--muted);">⭐ Premium</div></div>
+    <button onclick="doLogout()" style="padding:6px 12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;color:var(--red);font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;">Sair</button>
+  </div>
+</div>
+<div id="mobileMoreOverlay" style="display:none;position:fixed;inset:0;z-index:148;" onclick="closeMobileMenu()"></div>
+
 <main class="main">
   <div class="topbar">
     <div class="tb-title" id="tbTitle">Dashboard</div>
