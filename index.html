@@ -631,10 +631,11 @@ select.fi option{background:var(--card2);color:var(--text);}
     </div>
     <div class="fr">
       <div class="fg"><label class="fl">Categoria</label>
-        <select class="fi" id="txCat">
+        <select class="fi" id="txCat" onchange="if(this.value==='__new__'){this.value=this.dataset.prev||'Outros';openNewCatForTx()}" onfocus="this.dataset.prev=this.value">
           <option>Alimentação</option><option>Moradia</option><option>Transporte</option><option>Saúde</option>
           <option>Lazer</option><option>Salário</option><option>Freelance</option><option>Investimentos</option>
           <option>Assinatura</option><option>Educação</option><option>Vestuário</option><option>Combustível</option><option>Outros</option>
+          <option value="__new__">＋ Nova categoria...</option>
         </select>
       </div>
       <div class="fg"><label class="fl">Conta</label>
@@ -1058,7 +1059,10 @@ function isoToDisplay(iso){ if(!iso) return ''; const d=new Date(iso+'T12:00:00'
 // ════════════════════════════════════════════════
 const C_ICON={Alimentação:'🛒',Moradia:'🏠',Transporte:'🚗',Saúde:'💊',Lazer:'🎮',Salário:'💼',Freelance:'🎨',Investimentos:'📈','Renda Extra':'💵',Outros:'📌',Assinatura:'📱',Educação:'📚',Vestuário:'👕',Combustível:'⛽',Restaurante:'🍽️'};
 const C_COLOR={Alimentação:'#f59e0b',Moradia:'#ef4444',Transporte:'#3b82f6',Saúde:'#8b5cf6',Lazer:'#06b6d4',Salário:'#22c55e',Freelance:'#22c55e','Renda Extra':'#22c55e',Investimentos:'#22c55e',Outros:'#6b7591',Assinatura:'#6366f1',Educação:'#f59e0b',Vestuário:'#f59e0b',Combustível:'#3b82f6',Restaurante:'#f59e0b'};
-const ALL_CATS=['Alimentação','Moradia','Transporte','Saúde','Lazer','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Outros'];
+const DEFAULT_CATS=['Alimentação','Moradia','Transporte','Saúde','Lazer','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Outros'];
+function getAllCats(){ try{ const c=JSON.parse(localStorage.getItem('fp_custom_cats')||'[]'); return [...DEFAULT_CATS,...c]; }catch(e){ return DEFAULT_CATS; } }
+function addCustomCat(name){ try{ const c=JSON.parse(localStorage.getItem('fp_custom_cats')||'[]'); if(!c.includes(name))c.push(name); localStorage.setItem('fp_custom_cats',JSON.stringify(c)); }catch(e){} }
+const ALL_CATS=getAllCats();
 
 // ════════════════════════════════════════════════
 // NAV
@@ -2062,7 +2066,7 @@ function renderReview(){
     <div class="rr ${r._dup?'dup':''} ${!r._sel?'excl':''}" id="rv${i}">
       <div class="rck ${r._sel?'on':''}" onclick="togRow(${i})">${r._sel?'✓':''}</div>
       <input class="ri" value="${r.name}" onchange="updRow(${i},'name',this.value)">
-      <select class="ri" onchange="updRow(${i},'cat',this.value)">${ALL_CATS.map(c=>`<option${c===r.cat?' selected':''}>${c}</option>`).join('')}</select>
+      <select class="ri" onchange="onCatChange(this,${i})">${getAllCats().map(c=>`<option${c===r.cat?' selected':''}>${c}</option>`).join('')}<option value="__new__">＋ Nova categoria...</option></select>
       <input class="ri" value="${r.date||''}" onchange="updRow(${i},'date',this.value)" style="max-width:70px;">
       <div class="rvs ${r.type==='receita'?'p':'n'}">
         <span>${r.type==='receita'?'+':'-'}</span>
@@ -2074,6 +2078,89 @@ function renderReview(){
 }
 function togRow(i){_pendRows[i]._sel=!_pendRows[i]._sel;renderReview();updImpBtn();}
 function updRow(i,f,v){_pendRows[i][f]=v;if(f==='cat'){_pendRows[i].icon=C_ICON[v]||'💰';}}
+
+function onCatChange(sel,i){
+  if(sel.value==='__new__'){
+    // Reset select to previous value while modal opens
+    sel.value=_pendRows[i].cat||'Outros';
+    openNewCatModal(i);
+  } else {
+    updRow(i,'cat',sel.value);
+  }
+}
+
+function openNewCatModal(rowIdx){
+  // Remove existing modal if any
+  document.getElementById('newCatModal')?.remove();
+  const m=document.createElement('div');
+  m.id='newCatModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  m.innerHTML=`
+    <div style="background:var(--card2);border:1px solid var(--border);border-radius:16px;padding:24px;width:340px;animation:mdIn .2s ease;">
+      <div style="font-size:15px;font-weight:800;margin-bottom:6px;">✏️ Nova Categoria</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Crie uma categoria personalizada para suas transações</div>
+      <input id="newCatInput" class="fi" placeholder="Ex: iFood, Supermercado, Academia..." style="margin-bottom:8px;">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:16px;">Exemplos: iFood · Supermercado · Academia · Streaming · Pets</div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="document.getElementById('newCatModal').remove()" style="flex:1;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--muted);font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
+        <button onclick="saveNewCat(${rowIdx})" style="flex:2;padding:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:9px;color:#fff;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">✓ Criar e Selecionar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+  // Allow Enter key
+  document.getElementById('newCatInput').onkeydown=e=>{ if(e.key==='Enter') saveNewCat(rowIdx); };
+  setTimeout(()=>document.getElementById('newCatInput')?.focus(),80);
+}
+
+function openNewCatForTx(){
+  document.getElementById('newCatModal')?.remove();
+  const m=document.createElement('div');
+  m.id='newCatModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  m.innerHTML=`
+    <div style="background:var(--card2);border:1px solid var(--border);border-radius:16px;padding:24px;width:340px;animation:mdIn .2s ease;">
+      <div style="font-size:15px;font-weight:800;margin-bottom:6px;">✏️ Nova Categoria</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Crie uma categoria personalizada</div>
+      <input id="newCatInput" class="fi" placeholder="Ex: iFood, Supermercado, Academia..." style="margin-bottom:16px;">
+      <div style="display:flex;gap:8px;">
+        <button onclick="document.getElementById('newCatModal').remove()" style="flex:1;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--muted);font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
+        <button onclick="saveNewCatForTx()" style="flex:2;padding:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:9px;color:#fff;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">✓ Criar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+  document.getElementById('newCatInput').onkeydown=e=>{ if(e.key==='Enter') saveNewCatForTx(); };
+  setTimeout(()=>document.getElementById('newCatInput')?.focus(),80);
+}
+
+function saveNewCatForTx(){
+  const name=document.getElementById('newCatInput')?.value?.trim();
+  if(!name){ alert('Digite o nome da categoria'); return; }
+  addCustomCat(name);
+  // Add to txCat select and select it
+  const sel=document.getElementById('txCat');
+  if(sel){
+    const opt=document.createElement('option');
+    opt.value=name;opt.textContent=name;
+    sel.insertBefore(opt,sel.querySelector('option[value="__new__"]'));
+    sel.value=name;
+  }
+  document.getElementById('newCatModal')?.remove();
+  toast('✓ Categoria "'+name+'" criada!','#22c55e');
+}
+
+function saveNewCat(rowIdx){
+  const name=document.getElementById('newCatInput')?.value?.trim();
+  if(!name){ alert('Digite o nome da categoria'); return; }
+  // Save to localStorage
+  addCustomCat(name);
+  // Apply to this row
+  _pendRows[rowIdx].cat=name;
+  _pendRows[rowIdx].icon=C_ICON[name]||'🏷️';
+  document.getElementById('newCatModal')?.remove();
+  // Re-render so new category appears in all dropdowns
+  renderReview();
+  toast('✓ Categoria "'+name+'" criada!','#22c55e');
+}
 function rmRow(i){_pendRows.splice(i,1);renderReview();updImpBtn();}
 function selAll(s){_pendRows.forEach(r=>r._sel=s);renderReview();updImpBtn();}
 function updImpBtn(){const sel=_pendRows.filter(r=>r._sel).length;document.getElementById('impDoBtn').textContent=`Importar ${sel} transação${sel!==1?'ões':''}`;}
