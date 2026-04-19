@@ -1781,7 +1781,7 @@ function doImport(){
       }
     }
 
-    // Save current instalment — anchored to invoice month
+    // Save current instalment — pinned to the invoice month being imported
     DB.transactions.unshift({
       id:'tx'+Date.now()+Math.random(),
       name:instMatch?`${baseName} ${curPart}/${totalParts}`:r.name,
@@ -1791,17 +1791,22 @@ function doImport(){
       color:C_COLOR[r.cat]||'#6b7591',
       accId:finalCardId?null:finalAccId,
       cardId:finalCardId||null,
-      parcelado:totalParts>1,totalParcelas:totalParts,parcelaAtual:curPart
+      parcelado:totalParts>1,totalParcelas:totalParts,parcelaAtual:curPart,
+      // Pin to the invoice month being imported (only when importing to a card)
+      invoiceMonth:finalCardId?curMonth:null,
+      invoiceYear:finalCardId?curYear:null
     });
     totalImported++;
 
     // ── Create future instalments: each one month ahead of the current ──
-    // e.g. 2/4 in April → 3/4 in May, 4/4 in June
     if(instMatch && remainingParts>0){
       for(let i=1;i<=remainingParts;i++){
         const futureMonth=curMonth+i;
         const futureDateISO=makeDate(curYear,futureMonth,1);
         const partNum=curPart+i;
+        // Calculate correct future invoice month/year
+        let futInvMonth=(curMonth+i)%12;
+        let futInvYear=curYear+Math.floor((curMonth+i)/12);
         DB.transactions.unshift({
           id:'tx'+Date.now()+Math.random()+'p'+i,
           name:`${baseName} ${partNum}/${totalParts}`,
@@ -1811,7 +1816,9 @@ function doImport(){
           color:C_COLOR[r.cat]||'#6b7591',
           accId:finalCardId?null:finalAccId,
           cardId:finalCardId||null,
-          parcelado:true,totalParcelas:totalParts,parcelaAtual:partNum
+          parcelado:true,totalParcelas:totalParts,parcelaAtual:partNum,
+          invoiceMonth:finalCardId?futInvMonth:null,
+          invoiceYear:finalCardId?futInvYear:null
         });
         totalInstallments++;
       }
@@ -2020,6 +2027,12 @@ function renderInvTxList(){
 // (purchase after closing date of previous month goes to next invoice)
 function txBelongsToInvoice(t, card, month, year){
   if(!t.dateISO) return false;
+
+  // If transaction was pinned to a specific invoice month (manual launch from invoice)
+  if(t.invoiceMonth!==null && t.invoiceMonth!==undefined && t.invoiceYear!==null && t.invoiceYear!==undefined){
+    return t.invoiceMonth===month && t.invoiceYear===year;
+  }
+
   const d=new Date(t.dateISO+'T12:00:00');
   const tMonth=d.getMonth();
   const tYear=d.getFullYear();
@@ -2030,7 +2043,6 @@ function txBelongsToInvoice(t, card, month, year){
   if(tMonth===month && tYear===year) return true;
 
   // Previous month, after closing date → belongs to this invoice
-  // (e.g. bought 28/Mar after closing day 5 → goes to April invoice)
   let prevMonth=month-1; let prevYear=year;
   if(prevMonth<0){ prevMonth=11; prevYear--; }
   if(tMonth===prevMonth && tYear===prevYear && tDay>due) return true;
@@ -2141,8 +2153,9 @@ function execDelInvoiceTx(txId, cardId){
   toast('✓ Lançamento excluído','#22c55e');
 }
 function addCardTx(){
+  const invM=curMonth, invY=curYear;
   closeInv();
-  openTxModal(null,_invCardId);
+  openTxModal(null,_invCardId,null,invM,invY);
 }
 
 // ════════════════════════════════════════════════
@@ -2203,8 +2216,13 @@ function openTxModal(editId=null, preCardId=null, preAccId=null, preMonth=null, 
   document.getElementById('txEditId').value=editId||'';
   document.getElementById('txDate').value=todayISO();
   const dateInput=document.getElementById('txDate');
-  delete dateInput.dataset.invMonth;
-  delete dateInput.dataset.invYear;
+  if(preMonth!==null && preYear!==null){
+    dateInput.dataset.invMonth=preMonth;
+    dateInput.dataset.invYear=preYear;
+  } else {
+    delete dateInput.dataset.invMonth;
+    delete dateInput.dataset.invYear;
+  }
   document.querySelector('.inv-month-note')?.remove();
   const accSel=document.getElementById('txAcc');
   accSel.innerHTML='<option value="">— Selecione —</option>'+DB.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
@@ -2304,7 +2322,11 @@ function saveTx(){
   const parcelaTotal=parseInt(document.getElementById('txParcelaTotal')?.value)||0;
   const hasParc=!editId&&parcelaAtual>0&&parcelaTotal>=parcelaAtual&&type==='despesa';
 
+  const dateInput2=document.getElementById('txDate');
   const baseName=hasParc?`${desc} ${parcelaAtual}/${parcelaTotal}`:desc;
+  // If launched from inside a card invoice, pin to that invoice month
+  const pinInvMonth=dateInput2.dataset.invMonth!==undefined?parseInt(dateInput2.dataset.invMonth):null;
+  const pinInvYear=dateInput2.dataset.invYear!==undefined?parseInt(dateInput2.dataset.invYear):null;
   const obj={
     id:editId||'tx'+Date.now(),
     name:baseName,cat,type,val,dateISO,
@@ -2315,7 +2337,9 @@ function saveTx(){
     cardId:cardId||null,
     parcelado:hasParc,
     totalParcelas:hasParc?parcelaTotal:null,
-    parcelaAtual:hasParc?parcelaAtual:null
+    parcelaAtual:hasParc?parcelaAtual:null,
+    invoiceMonth:pinInvMonth,
+    invoiceYear:pinInvYear
   };
   if(editId){ const i=DB.transactions.findIndex(x=>x.id===editId); if(i>=0)DB.transactions[i]=obj; }
   else DB.transactions.unshift(obj);
@@ -2329,6 +2353,9 @@ function saveTx(){
       let futYear=baseDate.getFullYear();
       while(futMonth>11){futMonth-=12;futYear++;}
       const futISO=`${futYear}-${(futMonth+1).toString().padStart(2,'0')}-${String(baseDate.getDate()).padStart(2,'0')}`;
+      // Future instalment invoice month = pinned month + i (or null if no pin)
+      const futInvMonth=pinInvMonth!==null?(pinInvMonth+i)%12:null;
+      const futInvYear=pinInvYear!==null?pinInvYear+Math.floor((pinInvMonth+i)/12):null;
       DB.transactions.unshift({
         id:'tx'+Date.now()+Math.random()+'p'+i,
         name:`${desc} ${parcelaAtual+i}/${parcelaTotal}`,
@@ -2336,7 +2363,8 @@ function saveTx(){
         dateISO:futISO,date:isoToDisplay(futISO),
         icon:C_ICON[cat]||'💰',color:C_COLOR[cat]||'#6b7591',
         accId:cardId?null:(accId||null),cardId:cardId||null,
-        parcelado:true,totalParcelas:parcelaTotal,parcelaAtual:parcelaAtual+i
+        parcelado:true,totalParcelas:parcelaTotal,parcelaAtual:parcelaAtual+i,
+        invoiceMonth:futInvMonth,invoiceYear:futInvYear
       });
     }
   }
