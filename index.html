@@ -723,7 +723,7 @@ select.fi option{background:var(--card2);color:var(--text);}
       <div class="fg"><label class="fl" id="cardLimitLbl">Limite Total (R$)</label><input class="fi" id="cardLimit" type="number" placeholder="0,00" step="0.01"></div>
     </div>
     <div class="fr" id="cardCreditFields">
-      <div class="fg"><label class="fl">Vencimento (dia)</label><input class="fi" id="cardDue" type="number" placeholder="10" min="1" max="31"></div>
+      <div class="fg"><label class="fl">Dia de vencimento</label><input class="fi" id="cardDue" type="number" placeholder="Ex: 6 (paga no mês seguinte)" min="1" max="31"><div style="font-size:10px;color:var(--muted);margin-top:4px;">💡 A fatura fecha no mês anterior e é paga neste dia do mês seguinte</div></div>
       <div class="fg"><label class="fl">Cor</label>
         <div style="display:flex;gap:7px;" id="cardColors">
           <div class="card-color-opt" data-color="#8b5cf6" style="width:26px;height:26px;background:#8b5cf6;border-radius:6px;cursor:pointer;border:2px solid transparent;" onclick="selCardColor(this)"></div>
@@ -1728,25 +1728,35 @@ function doImport(){
     const totalParts=instMatch?parseInt(instMatch[3]):1;
     const remainingParts=totalParts-curPart; // parts AFTER current month
 
-    // Parse current date
-    const dateParts=(r.date||'').split('/');
-    let baseYear=curYear, baseMonth=curMonth;
-    if(dateParts.length===2){
-      const day=parseInt(dateParts[0])||1;
-      const mon=dateParts[1]?parseInt(dateParts[1])-1:curMonth;
-      baseMonth=mon;
-    }
-
     const makeDate=(yr,mo,day)=>{
-      const m=(mo+1).toString().padStart(2,'0');
-      const d=(day||1).toString().padStart(2,'0');
-      return `${yr}-${m}-${d}`;
+      let m=mo; let y=yr;
+      while(m>11){m-=12;y++;}
+      while(m<0){m+=12;y--;}
+      return `${y}-${(m+1).toString().padStart(2,'0')}-${(day||1).toString().padStart(2,'0')}`;
     };
 
-    const day=dateParts.length===2?dateParts[0].padStart(2,'0'):'01';
-    const dateISO=makeDate(baseYear,baseMonth,parseInt(day));
+    // ── Key insight: for instalments, the current parcela belongs to curMonth/curYear
+    // (the month of the invoice being imported), regardless of the original purchase date.
+    // Only for non-instalment transactions we use the date from the statement.
+    let dateISO;
+    if(instMatch){
+      // Current parcela → current invoice month (curMonth/curYear)
+      dateISO=makeDate(curYear,curMonth,1);
+    } else {
+      // Normal transaction → use date from statement
+      const dateParts=(r.date||'').split('/');
+      if(dateParts.length>=2){
+        const day=parseInt(dateParts[0])||1;
+        // If month is provided in date use it, otherwise use curMonth
+        const mon=dateParts[1]?parseInt(dateParts[1])-1:curMonth;
+        const yr=mon>curMonth?curYear-1:curYear; // if month is ahead, it's last year
+        dateISO=makeDate(yr,mon,day);
+      } else {
+        dateISO=makeDate(curYear,curMonth,1);
+      }
+    }
 
-    // Save current instalment
+    // Save current instalment — anchored to invoice month
     DB.transactions.unshift({
       id:'tx'+Date.now()+Math.random(),
       name:instMatch?`${baseName} ${curPart}/${totalParts}`:r.name,
@@ -1760,13 +1770,12 @@ function doImport(){
     });
     totalImported++;
 
-    // ── Create future instalments automatically ──
+    // ── Create future instalments: each one month ahead of the current ──
+    // e.g. 2/4 in April → 3/4 in May, 4/4 in June
     if(instMatch && remainingParts>0){
       for(let i=1;i<=remainingParts;i++){
-        let futureMonth=baseMonth+i;
-        let futureYear=baseYear;
-        while(futureMonth>11){futureMonth-=12;futureYear++;}
-        const futureDateISO=makeDate(futureYear,futureMonth,parseInt(day));
+        const futureMonth=curMonth+i;
+        const futureDateISO=makeDate(curYear,futureMonth,1);
         const partNum=curPart+i;
         DB.transactions.unshift({
           id:'tx'+Date.now()+Math.random()+'p'+i,
@@ -1926,7 +1935,12 @@ function openInvoice(cardId){
   const pct=card.limit>0?Math.min(Math.round(spent/card.limit*100),100):0;
 
   document.getElementById('invTitle').textContent='Fatura — '+card.name;
-  document.getElementById('invSubtitle').textContent=MONTHS[curMonth]+' '+curYear+' · Vence dia '+card.due;
+  // Payment is due in the NEXT month (e.g. April invoice → paid in May on due day)
+  const dueMonth=(curMonth+1)>11?0:curMonth+1;
+  const dueYear=(curMonth+1)>11?curYear+1:curYear;
+  const dueMonthName=MONTHS[dueMonth];
+  document.getElementById('invSubtitle').textContent=
+    MONTHS[curMonth]+' '+curYear+' · Vence '+card.due+'/'+dueMonthName.slice(0,3)+'/'+dueYear;
   document.getElementById('invSummaryBox').innerHTML=`
     <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Fatura</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--purple);">R$ ${fmt(spent)}</div></div>
     <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Utilizado</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:${pct>80?'var(--red)':'var(--yellow)'};">${pct}%</div></div>
