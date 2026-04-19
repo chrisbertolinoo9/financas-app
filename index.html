@@ -662,6 +662,21 @@ select.fi option{background:var(--card2);color:var(--text);}
         <select class="fi" id="txCard"><option value="">— Selecione —</option></select>
       </div>
     </div>
+    <!-- Parcelas (só aparece em despesas) -->
+    <div id="txParcelaBox" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:4px;">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">📅 Parcelamento</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label class="fl">Parcela atual (ex: 1)</label>
+          <input class="fi" id="txParcelaAtual" type="number" min="1" max="99" placeholder="1" oninput="updateTxParcelaPreview()">
+        </div>
+        <div>
+          <label class="fl">Total de parcelas (ex: 4)</label>
+          <input class="fi" id="txParcelaTotal" type="number" min="1" max="99" placeholder="4" oninput="updateTxParcelaPreview()">
+        </div>
+      </div>
+      <div id="txParcelaPreview" style="margin-top:8px;font-size:11px;color:var(--cyan);font-weight:600;"></div>
+    </div>
     <div class="md-foot">
       <button class="bc" onclick="closeTx()">Cancelar</button>
       <button class="bs rec" id="txSaveBtn" onclick="saveTx()">Salvar Receita</button>
@@ -782,6 +797,12 @@ select.fi option{background:var(--card2);color:var(--text);}
         <button class="card-imp-btn" onclick="openCardImport(_invCardId)">📄 Importar print/PDF</button>
         <button class="sb-new" style="width:auto;margin:0;padding:7px 12px;font-size:11px;" onclick="addCardTx()">+ Lançamento</button>
       </div>
+    </div>
+    <!-- Sort header -->
+    <div style="display:grid;grid-template-columns:1fr auto auto;gap:0;border-bottom:1px solid var(--border);margin-bottom:4px;padding:4px 10px;">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Descrição</div>
+      <div id="invSortDate" onclick="setInvSort('date')" style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;cursor:pointer;padding:0 12px;user-select:none;transition:color .15s;" title="Ordenar por data">Data <span id="invSortDateArr">↓</span></div>
+      <div id="invSortVal" onclick="setInvSort('val')" style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;cursor:pointer;padding:0 0 0 12px;user-select:none;transition:color .15s;" title="Ordenar por valor">Valor <span id="invSortValArr"></span></div>
     </div>
     <div id="invTxList"></div>
   </div>
@@ -1858,7 +1879,11 @@ function filterType(t){ renderTxList(document.getElementById('txSearch')?.value|
 // CARDS
 // ════════════════════════════════════════════════
 function cardMonthSpend(cardId){
-  return DB.transactions.filter(t=>t.cardId===cardId&&inCurMonth(t)&&t.type==='despesa').reduce((s,t)=>s+t.val,0);
+  const card=DB.cards.find(c=>c.id===cardId);
+  if(!card) return 0;
+  return DB.transactions
+    .filter(t=>t.cardId===cardId && txBelongsToInvoice(t,card,curMonth,curYear) && t.type==='despesa')
+    .reduce((s,t)=>s+t.val,0);
 }
 
 function renderCards(){
@@ -1931,11 +1956,95 @@ function closeAllMenus(){
 // INVOICE DETAIL
 // ════════════════════════════════════════════════
 let _invCardId=null;
+let _invSort='date'; // 'date' or 'val'
+let _invSortDir={date:'desc',val:'desc'}; // per-column direction
+
+function setInvSort(col){
+  if(_invSort===col){
+    // Toggle direction for this column
+    _invSortDir[col]=_invSortDir[col]==='desc'?'asc':'desc';
+  } else {
+    _invSort=col;
+  }
+  // Update header arrows
+  const dateArr=document.getElementById('invSortDateArr');
+  const valArr=document.getElementById('invSortValArr');
+  const dateHdr=document.getElementById('invSortDate');
+  const valHdr=document.getElementById('invSortVal');
+  if(dateArr){
+    dateArr.textContent=_invSort==='date'?(_invSortDir.date==='desc'?'↓':'↑'):'';
+    dateHdr.style.color=_invSort==='date'?'var(--accent)':'var(--muted)';
+  }
+  if(valArr){
+    valArr.textContent=_invSort==='val'?(_invSortDir.val==='desc'?'↓':'↑'):'';
+    valHdr.style.color=_invSort==='val'?'var(--accent)':'var(--muted)';
+  }
+  // Re-render the list
+  renderInvTxList();
+}
+
+function renderInvTxList(){
+  const card=DB.cards.find(c=>c.id===_invCardId);
+  if(!card) return;
+  let txs=DB.transactions
+    .filter(t=>t.cardId===_invCardId && txBelongsToInvoice(t,card,curMonth,curYear));
+
+  // Sort
+  if(_invSort==='date'){
+    txs=txs.sort((a,b)=>_invSortDir.date==='desc'
+      ?b.dateISO.localeCompare(a.dateISO)
+      :a.dateISO.localeCompare(b.dateISO));
+  } else {
+    txs=txs.sort((a,b)=>_invSortDir.val==='desc'?b.val-a.val:a.val-b.val);
+  }
+
+  const tl=document.getElementById('invTxList');
+  if(!tl) return;
+  tl.innerHTML=txs.length?txs.map(t=>`
+    <div class="txi" id="inv-txi-${t.id}">
+      <div class="tx-ico" style="background:${C_COLOR[t.cat]||'#6b7591'}22;">${t.icon||C_ICON[t.cat]||'💰'}</div>
+      <div class="tx-info"><div class="tx-nm">${t.name}</div><div class="tx-ct">${t.cat} · ${isoToDisplay(t.dateISO)}</div></div>
+      <div class="tx-r"><div class="tx-v n">- R$ ${fmt(t.val)}</div></div>
+      <div class="tx-acts">
+        <button class="act-btn" onclick="closeInv();openTxModal('${t.id}')" title="Editar">✏️</button>
+        <button class="act-btn del" onclick="confirmDelInvoiceTx('${t.id}','${t.name.replace(/'/g,"\'")}','${_invCardId}')" title="Excluir">🗑</button>
+      </div>
+    </div>`).join(''):'<div class="empty">Nenhum lançamento neste mês</div>';
+}
+
+// A transaction belongs to a card's invoice month if:
+// Its date falls within the billing cycle of that month.
+// Billing cycle: from day (due+1) of previous month to day (due) of current month.
+// For simplicity: if the transaction's month == curMonth → show in curMonth invoice
+// If the transaction's month == curMonth-1 AND day > card.due → also show in curMonth invoice
+// (purchase after closing date of previous month goes to next invoice)
+function txBelongsToInvoice(t, card, month, year){
+  if(!t.dateISO) return false;
+  const d=new Date(t.dateISO+'T12:00:00');
+  const tMonth=d.getMonth();
+  const tYear=d.getFullYear();
+  const tDay=d.getDate();
+  const due=card.due||1;
+
+  // Same month as invoice → belongs here
+  if(tMonth===month && tYear===year) return true;
+
+  // Previous month, after closing date → belongs to this invoice
+  // (e.g. bought 28/Mar after closing day 5 → goes to April invoice)
+  let prevMonth=month-1; let prevYear=year;
+  if(prevMonth<0){ prevMonth=11; prevYear--; }
+  if(tMonth===prevMonth && tYear===prevYear && tDay>due) return true;
+
+  return false;
+}
+
 function openInvoice(cardId){
   _invCardId=cardId;
   const card=DB.cards.find(c=>c.id===cardId);
   if(!card) return;
-  const txs=DB.transactions.filter(t=>t.cardId===cardId&&inCurMonth(t)).sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
+  const txs=DB.transactions
+    .filter(t=>t.cardId===cardId && txBelongsToInvoice(t,card,curMonth,curYear))
+    .sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
   const spent=txs.filter(t=>t.type==='despesa').reduce((s,t)=>s+t.val,0);
   const pct=card.limit>0?Math.min(Math.round(spent/card.limit*100),100):0;
 
@@ -1983,19 +2092,54 @@ function openInvoice(cardId){
 
   const tl=document.getElementById('invTxList');
   tl.innerHTML=txs.length?txs.map(t=>`
-    <div class="txi">
+    <div class="txi" id="inv-txi-${t.id}">
       <div class="tx-ico" style="background:${C_COLOR[t.cat]||'#6b7591'}22;">${t.icon||C_ICON[t.cat]||'💰'}</div>
       <div class="tx-info"><div class="tx-nm">${t.name}</div><div class="tx-ct">${t.cat} · ${isoToDisplay(t.dateISO)}</div></div>
       <div class="tx-r"><div class="tx-v n">- R$ ${fmt(t.val)}</div></div>
       <div class="tx-acts">
-        <button class="act-btn" onclick="openTxModal('${t.id}')" title="Editar">✏️</button>
-        <button class="act-btn del" onclick="confirmDelItem('tx','${t.id}','lançamento \"${t.name.replace(/'/g,"\'")}\"")" title="Excluir">🗑</button>
+        <button class="act-btn" onclick="closeInv();openTxModal('${t.id}',null,null,${curMonth},${curYear})" title="Editar">✏️</button>
+        <button class="act-btn del" onclick="confirmDelInvoiceTx('${t.id}','${t.name.replace(/'/g,"\\'")}','${_invCardId}')" title="Excluir">🗑</button>
       </div>
     </div>`).join(''):'<div class="empty">Nenhum lançamento neste mês</div>';
 
   document.getElementById('invOv').classList.add('on');
 }
 function closeInv(){ document.getElementById('invOv').classList.remove('on'); }
+
+function confirmDelInvoiceTx(txId, txName, cardId){
+  // Remove any existing confirmation popup
+  document.getElementById('invDelConfirm')?.remove();
+
+  const row=document.getElementById('inv-txi-'+txId);
+  if(!row) return;
+
+  // Create inline confirmation replacing the row
+  const conf=document.createElement('div');
+  conf.id='invDelConfirm';
+  conf.style.cssText='background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:9px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px;animation:mdIn .15s ease;';
+  conf.innerHTML=`
+    <div style="font-size:12px;color:var(--text);">
+      <span style="color:var(--red);font-weight:700;">⚠ Excluir?</span>
+      <span style="color:var(--muted);margin-left:6px;">${txName}</span>
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      <button onclick="document.getElementById('invDelConfirm').remove()" style="padding:5px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--muted);font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;">Cancelar</button>
+      <button onclick="execDelInvoiceTx('${txId}','${cardId}')" style="padding:5px 12px;background:var(--red);border:none;border-radius:7px;color:#fff;font-family:'Sora',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Sim, excluir</button>
+    </div>`;
+
+  // Insert confirmation after the row
+  row.style.opacity='0.4';
+  row.after(conf);
+}
+
+function execDelInvoiceTx(txId, cardId){
+  DB.transactions=DB.transactions.filter(x=>x.id!==txId);
+  saveDB();
+  document.getElementById('invDelConfirm')?.remove();
+  // Refresh invoice without closing
+  openInvoice(cardId);
+  toast('✓ Lançamento excluído','#22c55e');
+}
 function addCardTx(){
   closeInv();
   openTxModal(null,_invCardId);
@@ -2055,9 +2199,13 @@ function setRpPeriod(el,p){ document.querySelectorAll('.rp-btn').forEach(b=>b.cl
 // TX MODAL
 // ════════════════════════════════════════════════
 let _txTab='receita';
-function openTxModal(editId=null, preCardId=null, preAccId=null){
+function openTxModal(editId=null, preCardId=null, preAccId=null, preMonth=null, preYear=null){
   document.getElementById('txEditId').value=editId||'';
   document.getElementById('txDate').value=todayISO();
+  const dateInput=document.getElementById('txDate');
+  delete dateInput.dataset.invMonth;
+  delete dateInput.dataset.invYear;
+  document.querySelector('.inv-month-note')?.remove();
   const accSel=document.getElementById('txAcc');
   accSel.innerHTML='<option value="">— Selecione —</option>'+DB.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
   // Populate card selector
@@ -2093,6 +2241,12 @@ function openTxModal(editId=null, preCardId=null, preAccId=null){
     setTxTab('receita');
     document.getElementById('txDesc').value='';
     document.getElementById('txVal').value='';
+    // Clear parcela fields
+    const pa=document.getElementById('txParcelaAtual');
+    const pt=document.getElementById('txParcelaTotal');
+    if(pa) pa.value='';
+    if(pt) pt.value='';
+    updateTxParcelaPreview();
     if(preAccId) document.getElementById('txAcc').value=preAccId;
     if(preCardId){
       setTxTab('despesa');
@@ -2101,7 +2255,13 @@ function openTxModal(editId=null, preCardId=null, preAccId=null){
   }
   document.getElementById('txOv').classList.add('on');
 }
-function closeTx(){ document.getElementById('txOv').classList.remove('on'); }
+function closeTx(){
+  document.getElementById('txOv').classList.remove('on');
+  // Clear invoice month lock
+  const dateInput=document.getElementById('txDate');
+  if(dateInput){ delete dateInput.dataset.invMonth; delete dateInput.dataset.invYear; }
+  document.querySelector('.inv-month-note')?.remove();
+}
 function setTxTab(t){
   _txTab=t;
   document.querySelectorAll('.md-tab').forEach(b=>b.classList.remove('on'));
@@ -2109,11 +2269,30 @@ function setTxTab(t){
   const btn=document.getElementById('txSaveBtn');
   btn.textContent={receita:'Salvar Receita',despesa:'Salvar Despesa',transferencia:'Salvar Transferência'}[t];
   btn.className='bs '+(t==='receita'?'rec':t==='despesa'?'desp':'acc');
+  // Show parcela box only for despesas
+  const pb=document.getElementById('txParcelaBox');
+  if(pb) pb.style.display=(t==='despesa')?'block':'none';
+}
+
+function updateTxParcelaPreview(){
+  const cur=parseInt(document.getElementById('txParcelaAtual')?.value)||0;
+  const tot=parseInt(document.getElementById('txParcelaTotal')?.value)||0;
+  const prev=document.getElementById('txParcelaPreview');
+  if(!prev) return;
+  if(cur>0&&tot>0&&tot>=cur){
+    const remaining=tot-cur;
+    prev.textContent=remaining>0
+      ?`✓ Parcela ${cur}/${tot} — ${remaining} parcela${remaining!==1?'s':''} futura${remaining!==1?'s':''} serão criadas automaticamente`
+      :`✓ Parcela ${cur}/${tot} — última parcela`;
+    prev.style.color=remaining>0?'var(--cyan)':'var(--green)';
+  } else {
+    prev.textContent='';
+  }
 }
 function saveTx(){
   const desc=document.getElementById('txDesc').value.trim();
   const val=parseFloat(document.getElementById('txVal').value);
-  const dateISO=document.getElementById('txDate').value;
+  let dateISO=document.getElementById('txDate').value;
   const cat=document.getElementById('txCat').value;
   const accId=document.getElementById('txAcc').value;
   const editId=document.getElementById('txEditId').value;
@@ -2121,11 +2300,52 @@ function saveTx(){
   const type=_txTab==='transferencia'?'despesa':_txTab;
   learnCategory(desc,cat);
   const cardId=document.getElementById('txCard')?.value||null;
-  const obj={id:editId||'tx'+Date.now(),name:desc,cat,type,val,dateISO,date:isoToDisplay(dateISO),icon:C_ICON[cat]||'💰',color:C_COLOR[cat]||'#6b7591',accId:cardId?null:(accId||null),cardId:cardId||null};
+  const parcelaAtual=parseInt(document.getElementById('txParcelaAtual')?.value)||0;
+  const parcelaTotal=parseInt(document.getElementById('txParcelaTotal')?.value)||0;
+  const hasParc=!editId&&parcelaAtual>0&&parcelaTotal>=parcelaAtual&&type==='despesa';
+
+  const baseName=hasParc?`${desc} ${parcelaAtual}/${parcelaTotal}`:desc;
+  const obj={
+    id:editId||'tx'+Date.now(),
+    name:baseName,cat,type,val,dateISO,
+    date:isoToDisplay(dateISO),
+    icon:C_ICON[cat]||'💰',
+    color:C_COLOR[cat]||'#6b7591',
+    accId:cardId?null:(accId||null),
+    cardId:cardId||null,
+    parcelado:hasParc,
+    totalParcelas:hasParc?parcelaTotal:null,
+    parcelaAtual:hasParc?parcelaAtual:null
+  };
   if(editId){ const i=DB.transactions.findIndex(x=>x.id===editId); if(i>=0)DB.transactions[i]=obj; }
   else DB.transactions.unshift(obj);
+
+  // Create future instalments if parcelado
+  if(hasParc){
+    const remaining=parcelaTotal-parcelaAtual;
+    const baseDate=new Date(dateISO+'T12:00:00');
+    for(let i=1;i<=remaining;i++){
+      let futMonth=baseDate.getMonth()+i;
+      let futYear=baseDate.getFullYear();
+      while(futMonth>11){futMonth-=12;futYear++;}
+      const futISO=`${futYear}-${(futMonth+1).toString().padStart(2,'0')}-${String(baseDate.getDate()).padStart(2,'0')}`;
+      DB.transactions.unshift({
+        id:'tx'+Date.now()+Math.random()+'p'+i,
+        name:`${desc} ${parcelaAtual+i}/${parcelaTotal}`,
+        cat,type,val,
+        dateISO:futISO,date:isoToDisplay(futISO),
+        icon:C_ICON[cat]||'💰',color:C_COLOR[cat]||'#6b7591',
+        accId:cardId?null:(accId||null),cardId:cardId||null,
+        parcelado:true,totalParcelas:parcelaTotal,parcelaAtual:parcelaAtual+i
+      });
+    }
+  }
+
   saveDB(); renderAll(); closeTx();
-  toast(editId?'✓ Transação atualizada!':'✓ Transação adicionada!','#22c55e');
+  const msg=hasParc
+    ?`✓ Parcela ${parcelaAtual}/${parcelaTotal} salva + ${parcelaTotal-parcelaAtual} parcelas criadas automaticamente!`
+    :(editId?'✓ Transação atualizada!':'✓ Transação adicionada!');
+  toast(msg,'#22c55e');
 }
 
 // ════════════════════════════════════════════════
