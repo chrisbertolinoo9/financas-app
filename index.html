@@ -1442,21 +1442,14 @@ async function loadCloudData(uid){
     if(snap.exists()){
       const data=snap.data();
       if(data.db){
-        // Preserva dados locais que possam ter sido adicionados antes da nuvem responder
-        const localLoans = Array.isArray(DB.loans) ? [...DB.loans] : [];
         DB=JSON.parse(data.db);
         // Garante campos obrigatórios mesmo em DBs antigos da nuvem
         if(!Array.isArray(DB.accounts)) DB.accounts = [];
         if(!Array.isArray(DB.cards)) DB.cards = [];
         if(!Array.isArray(DB.planGoals)) DB.planGoals = [];
         if(!Array.isArray(DB.loans)) DB.loans = [];
-        // Mescla loans locais que não estejam na nuvem (evita perda de dados recentes)
-        localLoans.forEach(ll=>{
-          if(!DB.loans.find(cl=>cl.id===ll.id)) DB.loans.push(ll);
-        });
+        // Persiste localmente para fallback offline
         localStorage.setItem(STORE_KEY,JSON.stringify(DB));
-        renderAll();
-        toast('✓ Dados carregados da nuvem ☁️','#22c55e');
       }
     }
   }catch(e){ console.warn('Load cloud error:',e); }
@@ -3472,9 +3465,6 @@ async function doRegister(){
   }
 }
 function enterApp(name){
-  // Limpa QUALQUER versão antiga do banco ao fazer login
-  ['fp_db','fp_db_v1','fp_db_v2','financas_db','fp_data'].forEach(k=>localStorage.removeItem(k));
-
   const ls=document.getElementById('loginScreen');
   ls.style.transition='opacity .4s,transform .4s';ls.style.opacity='0';ls.style.transform='scale(1.03)';
   setTimeout(()=>{
@@ -3484,7 +3474,14 @@ function enterApp(name){
     requestAnimationFrame(()=>app.style.opacity='1');
     document.getElementById('sbName').textContent=name;
     document.getElementById('monthLbl').textContent=MONTHS[curMonth]+' '+curYear;
-    loadDB(); renderAll();
+    // Só carrega do localStorage se o DB ainda estiver vazio (nuvem não carregou ainda)
+    if(!DB.transactions || DB.transactions.length===0) loadDB();
+    // Garante campos obrigatórios
+    if(!Array.isArray(DB.accounts)) DB.accounts=[];
+    if(!Array.isArray(DB.cards)) DB.cards=[];
+    if(!Array.isArray(DB.planGoals)) DB.planGoals=[];
+    if(!Array.isArray(DB.loans)) DB.loans=[];
+    renderAll();
     toast('Bem-vindo, '+name.split(' ')[0]+'! 👋','#22c55e');
   },380);
 }
@@ -3790,12 +3787,12 @@ function renderLoans(){
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
           <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">Saldo Devedor</div>
-          <div style="font-size:20px;font-weight:800;color:var(--red);">${fmtBRL(debt)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px;">${fmtBRL(financed-debt)} quitado</div>
+          <div style="font-size:20px;font-weight:800;color:var(--red);">${fmt(debt)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">${fmt(financed-debt)} quitado</div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
           <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">Parcela Total</div>
-          <div style="font-size:20px;font-weight:800;color:var(--yellow);">${fmtBRL(totalCost)}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--yellow);">${fmt(totalCost)}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px;">prestação + seguro + taxa</div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
@@ -3805,7 +3802,7 @@ function renderLoans(){
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
           <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">Juros Restantes Est.</div>
-          <div style="font-size:20px;font-weight:800;color:var(--muted2);">${fmtBRL(projInterest)}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--muted2);">${fmt(projInterest)}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px;">taxa ${l.rateNominal||10}% a.a.</div>
         </div>
       </div>
@@ -3847,7 +3844,7 @@ function buildInstallmentBar(label, value, total, color){
     <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden;">
       <div style="height:100%;width:${pct.toFixed(1)}%;background:${color};border-radius:99px;"></div>
     </div>
-    <div style="width:70px;font-size:11px;font-weight:700;text-align:right;color:${color};">${fmtBRL(Math.max(0,value))}</div>
+    <div style="width:70px;font-size:11px;font-weight:700;text-align:right;color:${color};">${fmt(Math.max(0,value))}</div>
   </div>`;
 }
 
@@ -3937,7 +3934,7 @@ function openLoanSim(id){
   _simLoanId=id;
   const l=DB.loans.find(x=>x.id===id);
   if(!l) return;
-  document.getElementById('loanSimSub').textContent=`${l.name} · Saldo devedor ${fmtBRL(l.currentDebt||0)}`;
+  document.getElementById('loanSimSub').textContent=`${l.name} · Saldo devedor ${fmt(l.currentDebt||0)}`;
   document.getElementById('simExtra').value='';
   document.getElementById('simType').value='reduce_time';
   runSim();
@@ -3970,21 +3967,21 @@ function runSim(){
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
         <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">Sem amortização extra</div>
         <div style="font-size:16px;font-weight:800;">${yearsBase}a ${mosBase}m</div>
-        <div style="font-size:11px;color:var(--red);margin-top:3px;">${fmtBRL(iBase)} em juros</div>
+        <div style="font-size:11px;color:var(--red);margin-top:3px;">${fmt(iBase)} em juros</div>
       </div>
       <div style="background:${hasExtra?'rgba(34,197,94,.06)':'var(--bg3)'};border:1px solid ${hasExtra?'rgba(34,197,94,.3)':'var(--border)'};border-radius:12px;padding:14px;">
         <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">${hasExtra?'Com amortização extra':'Insira um valor acima'}</div>
         <div style="font-size:16px;font-weight:800;color:${hasExtra?'var(--green)':'var(--muted)'};">${hasExtra?`${yearsSim}a ${mosSim}m`:'—'}</div>
-        <div style="font-size:11px;color:${hasExtra?'var(--green)':'var(--muted)'};margin-top:3px;">${hasExtra?fmtBRL(iSim)+' em juros':'—'}</div>
+        <div style="font-size:11px;color:${hasExtra?'var(--green)':'var(--muted)'};margin-top:3px;">${hasExtra?fmt(iSim)+' em juros':'—'}</div>
       </div>
     </div>
     ${hasExtra?`
     <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:12px;padding:16px;">
-      <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px;">✅ Economia com ${fmtBRL(extra)} de amortização</div>
+      <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px;">✅ Economia com ${fmt(extra)} de amortização</div>
       <div style="display:flex;flex-direction:column;gap:7px;font-size:12px;">
         <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Meses economizados</span><span style="font-weight:700;color:var(--green);">${savedMonths} meses (${Math.floor(savedMonths/12)}a ${savedMonths%12}m)</span></div>
-        <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Juros economizados</span><span style="font-weight:700;color:var(--green);">${fmtBRL(savedInterest)}</span></div>
-        ${simType==='reduce_installment'?`<div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Nova parcela estimada</span><span style="font-weight:700;color:var(--cyan);">${fmtBRL(newInst)}</span></div>`:''}
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Juros economizados</span><span style="font-weight:700;color:var(--green);">${fmt(savedInterest)}</span></div>
+        ${simType==='reduce_installment'?`<div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Nova parcela estimada</span><span style="font-weight:700;color:var(--cyan);">${fmt(newInst)}</span></div>`:''}
         <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Retorno do aporte</span><span style="font-weight:700;color:var(--yellow);">${extra>0?(savedInterest/extra*100).toFixed(0)+'% sobre o valor':''}</span></div>
       </div>
     </div>`:''}
