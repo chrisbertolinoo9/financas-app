@@ -13,6 +13,46 @@
 <link rel="manifest" href="manifest.json">
 <!-- Apple touch icons -->
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0e18'/><text y='.9em' font-size='80' x='10'>💰</text></svg>">
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDS9jas6glRKF8Gyzy3B-xhpPiffDPSOX0",
+    authDomain: "financas-pro-313d2.firebaseapp.com",
+    projectId: "financas-pro-313d2",
+    storageBucket: "financas-pro-313d2.firebasestorage.app",
+    messagingSenderId: "236962762522",
+    appId: "1:236962762522:web:7cc3c537f3bc15644726a3"
+  };
+
+  const fbApp = initializeApp(firebaseConfig);
+  const fbAuth = getAuth(fbApp);
+  const fbDb = getFirestore(fbApp);
+
+  // Expose to global scope for use in main app code
+  window._fbAuth = fbAuth;
+  window._fbDb = fbDb;
+  window._fbSignIn = signInWithEmailAndPassword;
+  window._fbSignOut = signOut;
+  window._fbOnAuth = onAuthStateChanged;
+  window._fbDoc = doc;
+  window._fbSetDoc = setDoc;
+  window._fbGetDoc = getDoc;
+  window._fbOnSnapshot = onSnapshot;
+  window._fbReady = true;
+
+  // Listen for auth state changes
+  onAuthStateChanged(fbAuth, (user) => {
+    window._fbUser = user || null;
+    if (window._onFbAuthChange) window._onFbAuthChange(user);
+  });
+</script>
+
 <!-- Service Worker registration -->
 <script>
 if('serviceWorker' in navigator){
@@ -508,8 +548,8 @@ select.fi option{background:var(--card2);color:var(--text);}
     <div class="lt">Bem-vindo de volta 👋</div>
     <div class="ls">Entre com suas credenciais para continuar</div>
     <div class="lg">
-      <label class="llb">Usuário</label>
-      <div class="liw"><span class="lii">👤</span><input class="lin" id="lu" type="text" placeholder="seu.usuario" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('lp').focus()"></div>
+      <label class="llb">E-mail</label>
+      <div class="liw"><span class="lii">✉️</span><input class="lin" id="lu" type="email" placeholder="seu@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('lp').focus()"></div>
     </div>
     <div class="lg">
       <label class="llb">Senha</label>
@@ -519,16 +559,17 @@ select.fi option{background:var(--card2);color:var(--text);}
         <button type="button" id="eyeBtn" onclick="togglePw()" title="Mostrar/ocultar senha" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;padding:6px 8px;border-radius:6px;color:var(--muted);line-height:1;z-index:10;">👁</button>
       </div>
     </div>
-    <div class="lerr" id="lerr"><span>⚠️</span><span id="lerrmsg">Usuário ou senha incorretos.</span></div>
-    <div id="pwHint" style="display:none;font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px;padding:8px;background:var(--bg3);border-radius:7px;border:1px solid var(--border);">
-      💡 Senha com letra maiúscula e underline: <b id="pwHintReveal" style="color:var(--accent);cursor:pointer;" onclick="revealPwHint()">clique para ver</b>
-    </div>
+    <div class="lerr" id="lerr"><span>⚠️</span><span id="lerrmsg">E-mail ou senha incorretos.</span></div>
     <button class="lbtn" id="lbtn" onclick="doLogin()">
       <span class="lbt">Entrar →</span>
       <span class="lbd"><span class="lbdd"></span><span class="lbdd"></span><span class="lbdd"></span></span>
     </button>
     <div class="lat" id="lat"></div>
-    <div class="lf">Acesso restrito · <span>FinançasPro © 2026</span></div>
+    <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--muted);">
+      Não tem conta? <span onclick="doRegister()" style="color:var(--accent);cursor:pointer;font-weight:700;">Criar conta grátis</span>
+    </div>
+    <div style="text-align:center;margin-top:8px;font-size:10px;color:var(--muted);opacity:.6;">☁️ Dados sincronizados na nuvem</div>
+    <div class="lf">Acesso seguro · <span>FinançasPro © 2026</span></div>
   </div>
 </div>
 
@@ -1221,7 +1262,40 @@ try {
   }
 } catch(e){}
 
-function saveDB(){ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
+function saveDB(){
+  localStorage.setItem(STORE_KEY, JSON.stringify(DB));
+  syncToCloud();
+}
+
+let _syncTimeout=null;
+function syncToCloud(){
+  if(!window._fbDb||!window._fbUser) return;
+  clearTimeout(_syncTimeout);
+  _syncTimeout=setTimeout(async()=>{
+    try{
+      const uid=window._fbUser.uid;
+      await window._fbSetDoc(window._fbDoc(window._fbDb,'users',uid),{
+        db:JSON.stringify(DB),
+        updatedAt:Date.now()
+      });
+    }catch(e){ console.warn('Cloud sync error:',e); }
+  },2000);
+}
+
+async function loadCloudData(uid){
+  if(!window._fbDb) return;
+  try{
+    const snap=await window._fbGetDoc(window._fbDoc(window._fbDb,'users',uid));
+    if(snap.exists()){
+      const data=snap.data();
+      if(data.db){
+        DB=JSON.parse(data.db);
+        localStorage.setItem(STORE_KEY,JSON.stringify(DB));
+        toast('✓ Dados carregados da nuvem ☁️','#22c55e');
+      }
+    }
+  }catch(e){ console.warn('Load cloud error:',e); }
+}
 function loadDB(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
@@ -3133,62 +3207,60 @@ function revealPwHint(){
   document.getElementById('eyeBtn').textContent='🙈';
 }
 function showLErr(msg){ const el=document.getElementById('lerr');document.getElementById('lerrmsg').textContent=msg;el.classList.remove('show');void el.offsetWidth;el.classList.add('show'); }
-function doLogin(){
+async function doLogin(){
   const now=Date.now();
   if(_lockUntil>now){showLErr('Aguarde '+Math.ceil((_lockUntil-now)/1000)+'s para tentar novamente.');return;}
   const u=document.getElementById('lu').value.trim(),p=document.getElementById('lp').value;
-  if(!u||!p){showLErr('Preencha usuário e senha.');return;}
+  if(!u||!p){showLErr('Preencha e-mail e senha.');return;}
   const btn=document.getElementById('lbtn');btn.classList.add('loading');
   document.getElementById('lerr').classList.remove('show');
-  setTimeout(()=>{
-    btn.classList.remove('loading');
-    const userMatch=CREDS.find(c=>c.user.toLowerCase()===u.toLowerCase());
-    if(userMatch && userMatch.pass===p){
-      // ✅ Success
+
+  try{
+    if(window._fbAuth && window._fbSignIn){
+      // Firebase Auth
+      const cred=await window._fbSignIn(window._fbAuth,u,p);
+      const user=cred.user;
+      const name=user.displayName||u.split('@')[0]||'Usuário';
       _attempts=0;
-      document.getElementById('lu').classList.remove('err');
-      document.getElementById('lp').classList.remove('err');
-      saveSess(userMatch.name);
-      enterApp(userMatch.name);
-    } else if(!userMatch){
-      // ❌ User not found
-      _attempts++;
-      document.getElementById('lu').classList.add('err');
-      document.getElementById('lp').classList.remove('err');
-      document.getElementById('lp').value='';
-      const rem=5-_attempts;
-      if(_attempts>=5){
-        _lockUntil=Date.now()+300000;_attempts=0;
-        showLErr('Conta bloqueada por 5 minutos após múltiplas tentativas.');
-      } else {
-        showLErr('Usuário não encontrado. Verifique o nome de usuário.');
-        if(rem<=2) document.getElementById('lat').textContent='⚠ '+rem+' tentativa'+(rem!==1?'s':'')+' restante'+(rem!==1?'s':'');
-      }
-      document.getElementById('lu').focus();
+      saveSess(name);
+      // Load cloud data before entering app
+      await loadCloudData(user.uid);
+      btn.classList.remove('loading');
+      enterApp(name);
     } else {
-      // ❌ Wrong password (user exists)
-      _attempts++;
-      document.getElementById('lu').classList.remove('err');
-      document.getElementById('lp').classList.add('err');
-      document.getElementById('lp').value='';
-      const rem=5-_attempts;
-      if(_attempts>=5){
-        _lockUntil=Date.now()+300000;_attempts=0;
-        showLErr('Conta bloqueada por 5 minutos após múltiplas tentativas.');
-      } else {
-        showLErr('Senha incorreta. Verifique se o Caps Lock está ativo.');
-        if(_attempts>=2){
-          // Show password hint after 2 wrong attempts
-          document.getElementById('pwHint').style.display='block';
-          document.getElementById('pwHintReveal').textContent='clique para ver';
-          document.getElementById('pwHintReveal').style.color='var(--accent)';
-          document.getElementById('pwHintReveal').style.cursor='pointer';
-        }
-        if(rem<=2) document.getElementById('lat').textContent='⚠ '+rem+' tentativa'+(rem!==1?'s':'')+' restante'+(rem!==1?'s':'');
-      }
-      document.getElementById('lp').focus();
+      // Fallback local
+      btn.classList.remove('loading');
+      const userMatch=CREDS.find(c=>c.user.toLowerCase()===u.toLowerCase());
+      if(userMatch && userMatch.pass===p){ _attempts=0; saveSess(userMatch.name); enterApp(userMatch.name); }
+      else { _attempts++; showLErr('Credenciais inválidas.'); }
     }
-  },700);
+  }catch(e){
+    btn.classList.remove('loading');
+    _attempts++;
+    if(_attempts>=5){_lockUntil=Date.now()+300000;_attempts=0;showLErr('Conta bloqueada por 5 minutos.');return;}
+    const codes={'auth/user-not-found':'Usuário não encontrado.','auth/wrong-password':'Senha incorreta.','auth/invalid-email':'E-mail inválido.','auth/invalid-credential':'E-mail ou senha incorretos.'};
+    showLErr(codes[e.code]||'Erro ao entrar: '+e.message);
+  }
+}
+
+async function doRegister(){
+  const u=document.getElementById('lu').value.trim(),p=document.getElementById('lp').value;
+  if(!u||!p){showLErr('Preencha e-mail e senha.');return;}
+  if(p.length<6){showLErr('Senha deve ter pelo menos 6 caracteres.');return;}
+  const btn=document.getElementById('lbtn');btn.classList.add('loading');
+  try{
+    const {createUserWithEmailAndPassword}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
+    const cred=await createUserWithEmailAndPassword(window._fbAuth,u,p);
+    const name=u.split('@')[0]||'Usuário';
+    saveSess(name);
+    btn.classList.remove('loading');
+    enterApp(name);
+    toast('✓ Conta criada! Bem-vindo ao FinançasPro ☁️','#22c55e');
+  }catch(e){
+    btn.classList.remove('loading');
+    const codes={'auth/email-already-in-use':'E-mail já cadastrado. Faça login.','auth/invalid-email':'E-mail inválido.','auth/weak-password':'Senha muito fraca (mín. 6 caracteres).'};
+    showLErr(codes[e.code]||'Erro ao criar conta.');
+  }
 }
 function enterApp(name){
   // Limpa QUALQUER versão antiga do banco ao fazer login
@@ -3273,8 +3345,11 @@ function confirmClearAll(){
   }
 }
 
-function doLogout(){
+async function doLogout(){
   sessionStorage.removeItem(SK);
+  if(window._fbAuth && window._fbSignOut){
+    try{ await window._fbSignOut(window._fbAuth); }catch(e){}
+  }
   const app=document.getElementById('appWrap');app.style.transition='opacity .3s';app.style.opacity='0';
   setTimeout(()=>{
     app.classList.remove('on');
