@@ -916,6 +916,7 @@ select.fi option{background:var(--card2);color:var(--text);}
       </div>
       <div class="md-foot" style="margin-top:16px;">
         <button class="bc" onclick="closeImport()">Cancelar</button>
+        <button onclick="showGeminiConfig()" style="padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--muted);font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;" title="Configurar chave Gemini">🔑 Chave IA</button>
         <button class="bs acc" id="impAnalyzeBtn" onclick="runAI()" disabled>✨ Analisar com IA</button>
       </div>
     </div>
@@ -1971,7 +1972,7 @@ async function runAI(){
   const ps=document.getElementById('prevSec');
   const firstItem=_impImgs[0];
   const firstPreview=firstItem.type==='pdf'
-    ?`<div class="prev-img" style="flex-direction:column;gap:10px;"><div style="font-size:48px;">📄</div><div style="font-size:13px;font-weight:700;">${firstItem.name||'Arquivo PDF'}</div><div style="font-size:11px;color:var(--muted);">PDF será analisado página a página</div></div>`
+    ?`<div class="prev-img" style="flex-direction:column;gap:10px;"><div style="font-size:48px;">📄</div><div style="font-size:13px;font-weight:700;">${firstItem.name||'Arquivo PDF'}</div><div style="font-size:11px;color:var(--muted);">PDF será analisado pela IA</div></div>`
     :`<div class="prev-img"><img src="${firstItem.dataUrl}"></div>`;
   ps.innerHTML=firstPreview+`<div class="ai-box" style="display:flex;flex-direction:column;justify-content:center;gap:7px;margin-top:14px;">
       <div style="font-size:12px;font-weight:700;margin-bottom:4px;">O que a IA detecta:</div>
@@ -1983,7 +1984,7 @@ async function runAI(){
       <div style="font-size:11px;color:var(--muted);">✅ Duplicatas detectadas</div>
     </div>`;
 
-  const msgs=[['Lendo imagem...','Identificando texto'],['Detectando tabelas...','Localizando transações'],['Extraindo dados...','Datas, valores, descrições'],['Classificando...','Sugerindo categorias'],['Verificando duplicatas...','Comparando histórico'],['Finalizando...','Preparando revisão']];
+  const msgs=[['Lendo arquivo...','Identificando texto'],['Detectando tabelas...','Localizando transações'],['Extraindo dados...','Datas, valores, descrições'],['Classificando...','Sugerindo categorias'],['Verificando duplicatas...','Comparando histórico'],['Finalizando...','Preparando revisão']];
   let mi=0;
   const mInt=setInterval(()=>{ if(mi<msgs.length){document.getElementById('aiT').textContent=msgs[mi][0];document.getElementById('aiS').textContent=msgs[mi][1];mi++;} },900);
   let prog=0;
@@ -1995,72 +1996,46 @@ async function runAI(){
 
     for(const img of _impImgs){
       if(img.type==='pdf'){
-        content.push({
-          type:'document',
-          source:{type:'base64',media_type:'application/pdf',data:img.dataUrl.split(',')[1]}
-        });
+        content.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:img.dataUrl.split(',')[1]}});
       } else {
-        content.push({
-          type:'image',
-          source:{type:'base64',media_type:img.file.type||'image/jpeg',data:img.dataUrl.split(',')[1]}
-        });
+        content.push({type:'image',source:{type:'base64',media_type:img.file.type||'image/jpeg',data:img.dataUrl.split(',')[1]}});
       }
     }
 
     content.push({type:'text',text:`Analise ${_impImgs.length>1?'estes arquivos':'este arquivo'} de extrato/fatura bancária${hasPdf?' (PDF)':' (imagem)'}. Retorne APENAS JSON válido sem markdown:\n{"source":"banco detectado","transactions":[{"name":"descrição","val":0.00,"type":"despesa ou receita","cat":"Alimentação|Moradia|Transporte|Saúde|Lazer|Salário|Freelance|Assinatura|Educação|Vestuário|Combustível|Outros","date":"DD/MM","icon":"emoji"}]}\nRegras: cartão=despesa, crédito bancário=receita, débito=despesa. Para PDF extraia TODAS as transações visíveis. Valores numéricos puros sem R$ e sem pontos de milhar. Se não houver transações retorne transactions:[].`});
 
-    // Build request — PDFs need the anthropic-beta header
-    const headers = {'Content-Type':'application/json'};
-    if(hasPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25';
+    const PROXY='https://financas-proxy.chrisbertolinoo9.workers.dev/v1/messages';
+    const headers={'Content-Type':'application/json'};
+    if(hasPdf) headers['anthropic-beta']='pdfs-2024-09-25';
 
-    const body = {
-      model:'claude-sonnet-4-20250514',
-      max_tokens:4000,
-      messages:[{role:'user',content}]
-    };
+    const body={model:'claude-opus-4-5',max_tokens:4000,messages:[{role:'user',content}]};
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers,
-      body:JSON.stringify(body)
-    });
-
-    const data = await resp.json();
+    const resp=await fetch(PROXY,{method:'POST',headers,body:JSON.stringify(body)});
+    const data=await resp.json();
     clearInterval(mInt);clearInterval(pInt);
 
-    // Check for API-level errors
-    if(data.error){
-      throw new Error(data.error.message || 'API error: '+data.error.type);
-    }
-    if(!data.content || !data.content.length){
-      throw new Error('Resposta vazia da API');
-    }
+    if(data.error) throw new Error(data.error.message||'Erro da API');
+    if(!data.content||!data.content.length) throw new Error('Resposta vazia');
 
     document.getElementById('pf').style.width='100%';document.getElementById('pct').textContent='100%';
     document.getElementById('aiT').textContent='Concluído!';
 
     let extracted={transactions:[]};
     try{
-      const rawText=data.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
-      extracted=JSON.parse(rawText);
-    }catch(parseErr){
-      // If JSON parse fails but we got text, show what we got
-      console.warn('Parse error:', parseErr);
-    }
-    await new Promise(r=>setTimeout(r,500));
+      const raw=data.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+      extracted=JSON.parse(raw);
+    }catch(pe){console.warn('Parse error:',pe);}
+
+    await new Promise(r=>setTimeout(r,400));
     buildReview(extracted);impGoStep(3);
 
   }catch(e){
     clearInterval(mInt);clearInterval(pInt);
-    console.error('AI error:', e);
+    console.error('AI error:',e);
     document.getElementById('aiT').textContent='Erro na análise';
     document.getElementById('aiS').textContent=e.message||'Verifique o arquivo e tente novamente';
     document.getElementById('aiT').style.color='var(--red)';
-    // Show retry button instead of auto-redirect
-    setTimeout(()=>{
-      document.getElementById('aiT').style.color='';
-      impGoStep(1);
-    },3500);
+    setTimeout(()=>{document.getElementById('aiT').style.color='';impGoStep(1);},3500);
   }
 }
 
@@ -2116,6 +2091,62 @@ function doImport(){
   document.getElementById('impSuccT').textContent=`${toImp.length} transação${toImp.length!==1?'ões':''} importada${toImp.length!==1?'s':''}!`;
   document.getElementById('impSuccS').textContent=`${toImp.length} adicionada${toImp.length!==1?'s':''}${dups?` · ${dups} duplicada${dups!==1?'s':''} ignorada${dups!==1?'s':''}`:''}.`;
   impGoStep(4);
+}
+
+// ════════════════════════════════════════════════
+// GEMINI KEY MANAGEMENT (gratuito)
+// ════════════════════════════════════════════════
+function _getGeminiKey(){ return localStorage.getItem('fp_gemini_key')||'AIzaSyD0ORkM2fsLGR7MoOX2zYV4TBGXa7Q6aSw'; }
+function _setGeminiKey(k){ localStorage.setItem('fp_gemini_key',k.trim()); }
+
+function showGeminiKeyModal(){
+  const existing=_getGeminiKey();
+  const ov=document.createElement('div');
+  ov.id='geminiKeyOv';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(8px);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML=`
+    <div style="background:var(--card2);border:1px solid var(--border);border-radius:18px;padding:28px;width:460px;max-width:100%;animation:mdIn .2s ease;">
+      <div style="font-size:16px;font-weight:800;margin-bottom:6px;">🔑 Chave da API Gemini</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.6;">A importação por IA usa o <b style="color:var(--text);">Google Gemini</b> — gratuito, sem cartão necessário.<br>Obtenha sua chave em <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/apikey</a></div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;font-size:11px;color:var(--muted);line-height:1.7;">
+        <b style="color:var(--green);">✅ Como obter (30 segundos):</b><br>
+        1. Acesse <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/apikey</a><br>
+        2. Clique em <b style="color:var(--text);">"Create API key"</b><br>
+        3. Copie a chave e cole abaixo<br>
+        <span style="color:var(--yellow);">💡 Gratuito: 1.500 requisições/dia, sem cartão</span>
+      </div>
+      <input id="geminiKeyInput" class="fi" placeholder="AIzaSy..." value="${existing}" style="margin-bottom:14px;font-family:'JetBrains Mono',monospace;font-size:12px;">
+      <div style="display:flex;gap:8px;">
+        <button onclick="document.getElementById('geminiKeyOv').remove()" style="flex:1;padding:11px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--muted);font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
+        <button onclick="_saveGeminiKeyAndRun()" style="flex:2;padding:11px;background:linear-gradient(135deg,#4285f4,#34a853);border:none;border-radius:9px;color:#fff;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">✓ Salvar e Analisar</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:10px;">A chave fica salva no seu navegador — não é enviada para nenhum servidor</div>
+    </div>`;
+  document.body.appendChild(ov);
+  setTimeout(()=>document.getElementById('geminiKeyInput')?.focus(),100);
+}
+
+function _saveGeminiKeyAndRun(){
+  const k=document.getElementById('geminiKeyInput')?.value?.trim();
+  if(!k||!k.startsWith('AIza')){ alert('Chave inválida. Deve começar com "AIza..."'); return; }
+  _setGeminiKey(k);
+  document.getElementById('geminiKeyOv')?.remove();
+  toast('✓ Chave Gemini salva!','#4285f4');
+  // Re-open import and re-run
+  setTimeout(()=>runAI(),200);
+}
+
+// Show key config button in import modal footer
+function showGeminiConfig(){
+  const existing=_getGeminiKey();
+  if(existing){
+    const masked=existing.slice(0,8)+'...'+existing.slice(-4);
+    if(confirm(`Chave atual: ${masked}\n\nDeseja alterar a chave Gemini?`)){
+      showGeminiKeyModal();
+    }
+  } else {
+    showGeminiKeyModal();
+  }
 }
 
 // ════════════════════════════════════════════════
