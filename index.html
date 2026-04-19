@@ -437,6 +437,61 @@ select.fi option{background:var(--card2);color:var(--text);}
 .imp-dest-opt.on{border-color:var(--accent);background:var(--glow);color:var(--accent);}
 .imp-dest-opt.card-opt.on{border-color:var(--purple);background:rgba(139,92,246,.1);color:var(--purple);}
 .imp-dest-opt.acc-opt.on{border-color:var(--green);background:rgba(34,197,94,.1);color:var(--green);}
+
+/* ══════════════════════════════
+   MOBILE BOTTOM NAV
+══════════════════════════════ */
+#mobileNav{
+  display:none;position:fixed;bottom:0;left:0;right:0;
+  background:var(--bg2);border-top:1px solid var(--border);
+  z-index:150;padding:4px 0 max(4px,env(safe-area-inset-bottom));
+}
+.mn-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  gap:2px;padding:5px 2px;cursor:pointer;border:none;
+  background:none;font-family:'Sora',sans-serif;
+  font-size:9px;font-weight:600;color:var(--muted);transition:color .15s;
+}
+.mn-item.on{color:var(--accent);}
+.mn-ico{font-size:20px;width:34px;height:34px;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;}
+.mn-item.on .mn-ico{background:var(--glow);}
+.mn-badge2{position:absolute;top:-2px;right:-4px;background:var(--red);
+  color:#fff;border-radius:99px;font-size:7px;font-weight:800;
+  padding:1px 4px;border:2px solid var(--bg2);}
+
+/* ══════════════════════════════
+   MOBILE RESPONSIVE
+══════════════════════════════ */
+@media(max-width:700px){
+  .sb{display:none!important;}
+  .main{margin-left:0!important;}
+  .content{padding:12px 12px 80px!important;}
+  .topbar{padding:10px 14px!important;}
+  #mobileNav{display:flex!important;}
+  /* Score cards 2x2 */
+  .sg{grid-template-columns:1fr 1fr!important;gap:8px!important;}
+  .sc{padding:12px!important;}
+  .sc-val{font-size:15px!important;}
+  /* Cards and accounts single column */
+  .cc-grid{grid-template-columns:1fr!important;}
+  .acc-grid{grid-template-columns:1fr!important;}
+  /* Modals as bottom sheet */
+  .ov{align-items:flex-end!important;padding:0!important;}
+  .md{
+    width:100%!important;max-width:100%!important;
+    border-radius:20px 20px 0 0!important;
+    position:relative!important;
+    max-height:88vh!important;overflow-y:auto!important;
+  }
+  .md.wide{width:100%!important;max-width:100%!important;}
+  /* Forms single column */
+  .fr{flex-direction:column!important;}
+  /* Invoice summary */
+  #invSummaryBox{grid-template-columns:1fr 1fr 1fr!important;gap:6px!important;}
+  /* Review table compact */
+  .rh,.rr{grid-template-columns:18px 1fr 80px 48px 65px 44px 18px!important;font-size:9px!important;gap:3px!important;}
+}
 </style>
 </head>
 <body>
