@@ -492,6 +492,8 @@ select.fi option{background:var(--card2);color:var(--text);}
     <!-- DASHBOARD -->
     <div class="view on" id="view-dashboard">
       <div class="sg" id="dashCards"></div>
+      <!-- AI INSIGHTS -->
+      <div id="aiInsightsBox" style="margin-bottom:20px;display:none;"></div>
       <div class="g3">
         <div class="card">
           <div class="ch"><div class="ct">Últimas Transações</div><div class="ca" onclick="gv('transacoes')">Ver todas →</div></div>
@@ -686,16 +688,23 @@ select.fi option{background:var(--card2);color:var(--text);}
 <div class="ov" id="cardOv" onclick="if(event.target.id==='cardOv')closeCard()">
   <div class="md">
     <div class="md-title" id="cardMdTitle">Novo Cartão</div>
-    <div class="md-sub">Adicione um cartão de crédito</div>
+    <div class="md-sub">Adicione um cartão de crédito ou pré-pago</div>
     <input type="hidden" id="cardEditId">
-    <div class="fg"><label class="fl">Nome do Cartão</label><input class="fi" id="cardName" placeholder="Ex: Nubank, Itaú Visa..."></div>
+    <div class="fg"><label class="fl">Nome do Cartão</label><input class="fi" id="cardName" placeholder="Ex: Nubank, Recarga Pay..."></div>
+    <div class="fg"><label class="fl">Tipo do Cartão</label>
+      <select class="fi" id="cardType" onchange="toggleCardTypeFields(this.value)">
+        <option value="credito">💳 Crédito — fatura mensal</option>
+        <option value="prepago">🔄 Pré-pago — saldo carregado (ex: Recarga Pay)</option>
+        <option value="debito">🏦 Débito — vinculado à conta</option>
+      </select>
+    </div>
     <div class="fr">
       <div class="fg"><label class="fl">Bandeira</label>
         <select class="fi" id="cardBrand"><option>Visa</option><option>Mastercard</option><option>Elo</option><option>Amex</option><option>Hipercard</option><option>Outro</option></select>
       </div>
-      <div class="fg"><label class="fl">Limite Total (R$)</label><input class="fi" id="cardLimit" type="number" placeholder="0,00" step="0.01"></div>
+      <div class="fg"><label class="fl" id="cardLimitLbl">Limite Total (R$)</label><input class="fi" id="cardLimit" type="number" placeholder="0,00" step="0.01"></div>
     </div>
-    <div class="fr">
+    <div class="fr" id="cardCreditFields">
       <div class="fg"><label class="fl">Vencimento (dia)</label><input class="fi" id="cardDue" type="number" placeholder="10" min="1" max="31"></div>
       <div class="fg"><label class="fl">Cor</label>
         <div style="display:flex;gap:7px;" id="cardColors">
@@ -709,9 +718,31 @@ select.fi option{background:var(--card2);color:var(--text);}
         </div>
       </div>
     </div>
+    <div class="fg" id="cardCashbackField" style="display:none;">
+      <label class="fl">Cashback (%)</label>
+      <input class="fi" id="cardCashback" type="number" placeholder="Ex: 1.5" step="0.1" min="0" max="100">
+    </div>
     <div class="md-foot">
       <button class="bc" onclick="closeCard()">Cancelar</button>
       <button class="bs acc" onclick="saveCard()">Salvar Cartão</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CARREGAR SALDO PRÉ-PAGO -->
+<div class="ov" id="loadSaldoOv" onclick="if(event.target.id==='loadSaldoOv')document.getElementById('loadSaldoOv').classList.remove('on')">
+  <div class="md" style="width:380px;">
+    <div class="md-title">💳 Carregar Saldo</div>
+    <div class="md-sub" id="loadSaldoCardName">Adicione saldo ao cartão pré-pago</div>
+    <input type="hidden" id="loadSaldoCardId">
+    <div class="fg"><label class="fl">Valor a carregar (R$)</label><input class="fi" id="loadSaldoVal" type="number" placeholder="0,00" step="0.01"></div>
+    <div class="fg"><label class="fl">Data</label><input class="fi" id="loadSaldoDate" type="date"></div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:14px;font-size:11px;color:var(--muted);line-height:1.6;">
+      💡 Ao carregar saldo, o limite disponível do cartão aumenta pelo valor carregado e uma receita é registrada automaticamente.
+    </div>
+    <div class="md-foot">
+      <button class="bc" onclick="document.getElementById('loadSaldoOv').classList.remove('on')">Cancelar</button>
+      <button class="bs acc" onclick="saveLoadSaldo()">✓ Carregar Saldo</button>
     </div>
   </div>
 </div>
@@ -1064,6 +1095,55 @@ function getAllCats(){ try{ const c=JSON.parse(localStorage.getItem('fp_custom_c
 function addCustomCat(name){ try{ const c=JSON.parse(localStorage.getItem('fp_custom_cats')||'[]'); if(!c.includes(name))c.push(name); localStorage.setItem('fp_custom_cats',JSON.stringify(c)); }catch(e){} }
 const ALL_CATS=getAllCats();
 
+// ── CATEGORY INTELLIGENCE ──────────────────────────────
+// Built-in smart rules (keyword → category)
+const SMART_RULES=[
+  {keys:['ifood','ifd','rappi','uber eat','delivery','hamburger','pizza','burger'],cat:'Alimentação',icon:'🍔'},
+  {keys:['supermercado','mercado','carrefour','extra','atacadao','assai','pao de acucar','hortifruti','sacolao'],cat:'Alimentação',icon:'🛒'},
+  {keys:['restaurante','lanchonete','padaria','acougue','sushi','churrasco','birosca'],cat:'Alimentação',icon:'🍽️'},
+  {keys:['uber','99','cabify','taxi','onibus','metro','trem','passagem','brt'],cat:'Transporte',icon:'🚗'},
+  {keys:['posto','shell','petrobras','ipiranga','br distribuidora','combustivel','gasolina','alcool','etanol'],cat:'Combustível',icon:'⛽'},
+  {keys:['netflix','spotify','amazon prime','hbo','disney','globoplay','deezer','apple tv','youtube premium'],cat:'Assinatura',icon:'📱'},
+  {keys:['playstation','psn','ebn sony','xbox','steam','epic','nintendo','game','jogos'],cat:'Lazer',icon:'🎮'},
+  {keys:['farmacia','drogasil','ultrafarma','ultragenix','droga','remedio','medicamento','clinica','hospital','medico','plano saude'],cat:'Saúde',icon:'💊'},
+  {keys:['escola','faculdade','curso','uninter','senai','unifesp','usp','mensalidade','ensino','educação','livro'],cat:'Educação',icon:'📚'},
+  {keys:['shopping','zara','renner','c&a','riachuelo','hm','marisa','roupas','calçado','sapato','tenis'],cat:'Vestuário',icon:'👕'},
+  {keys:['aluguel','condominio','agua','luz','energia','gas','internet','telefone','celular'],cat:'Moradia',icon:'🏠'},
+  {keys:['salario','salário','pagamento','folha','vencimento','remuneracao'],cat:'Salário',icon:'💼'},
+  {keys:['mercadolivre','mercado livre','shopee','magalu','americanas','amazon','aliexpress'],cat:'Outros',icon:'📦'},
+  {keys:['apoiase','apoia','patreon','catarse','financiamento'],cat:'Lazer',icon:'❤️'},
+];
+
+function smartCategoryGuess(name){
+  if(!name) return null;
+  const lower=name.toLowerCase().replace(/[^a-z0-9\s]/g,'');
+  // Check user-learned mappings first
+  try{
+    const learned=JSON.parse(localStorage.getItem('fp_cat_learn')||'{}');
+    for(const [key,val] of Object.entries(learned)){
+      if(lower.includes(key.toLowerCase())) return val;
+    }
+  }catch(e){}
+  // Check built-in rules
+  for(const rule of SMART_RULES){
+    for(const kw of rule.keys){
+      if(lower.includes(kw)) return {cat:rule.cat,icon:rule.icon};
+    }
+  }
+  return null;
+}
+
+function learnCategory(name,cat){
+  // Save the first 3 significant words of the name as a learned mapping
+  if(!name||!cat) return;
+  try{
+    const learned=JSON.parse(localStorage.getItem('fp_cat_learn')||'{}');
+    const key=name.toLowerCase().replace(/[^a-z0-9\s]/g,'').trim().split(/\s+/).slice(0,3).join(' ');
+    if(key.length>2) learned[key]=cat;
+    localStorage.setItem('fp_cat_learn',JSON.stringify(learned));
+  }catch(e){}
+}
+
 // ════════════════════════════════════════════════
 // NAV
 // ════════════════════════════════════════════════
@@ -1178,6 +1258,9 @@ function renderDash(){
     </svg>
     <div class="dl">${sorted.map((e,i)=>`<div class="dl-i"><div class="dl-dot" style="background:${colors[i]}"></div><span class="dl-n">${e[0]}</span><span class="dl-v">R$ ${fmt(e[1])}</span></div>`).join('')||'<div style="font-size:11px;color:var(--muted);">Sem despesas</div>'}</div>`;
 
+  // AI Insights — generate automatically when there's enough data
+  renderInsights();
+
   // Rec cat
   const recTxs = txs.filter(t=>t.type==='receita');
   const recCatTot={};
@@ -1189,6 +1272,97 @@ function renderDash(){
       <div class="catb-r"><div class="catb-n"><div class="catb-dot" style="background:${C_COLOR[e[0]]||'#6b7591'}"></div>${e[0]}</div><div class="catb-v">R$ ${fmt(e[1])}</div></div>
       <div class="bar-bg"><div class="bar-fill" style="width:${Math.round(e[1]/maxRec*100)}%;background:${C_COLOR[e[0]]||'#6b7591'}"></div></div>
     </div>`).join(''):'<div class="empty">Sem receitas</div>';
+}
+
+// ════════════════════════════════════════════════
+// AI INSIGHTS DASHBOARD
+// ════════════════════════════════════════════════
+let _insightsCache=null,_insightsMonth=null,_insightsLoading=false;
+
+async function renderInsights(){
+  const box=document.getElementById('aiInsightsBox');
+  if(!box) return;
+  const txs=curMonthTxs();
+  if(txs.length<3){
+    box.style.display='none';
+    return;
+  }
+  // Show cached if same month
+  const monthKey=curMonth+'-'+curYear;
+  if(_insightsCache&&_insightsMonth===monthKey){
+    box.style.display='block';
+    box.innerHTML=_insightsCache;
+    return;
+  }
+  if(_insightsLoading) return;
+  // Show loading state
+  box.style.display='block';
+  box.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;align-items:center;gap:12px;">
+    <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🧠</div>
+    <div><div style="font-size:13px;font-weight:700;margin-bottom:3px;">Analisando seus dados...</div><div style="font-size:11px;color:var(--muted);">A IA está gerando insights personalizados</div></div>
+    <div style="margin-left:auto;display:flex;gap:4px;">${[1,2,3].map(()=>`<div style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:bp 1.2s ease infinite;"></div>`).join('')}</div>
+  </div>`;
+  _insightsLoading=true;
+
+  try{
+    const rec=txs.filter(t=>t.type==='receita').reduce((s,t)=>s+t.val,0);
+    const desp=txs.filter(t=>t.type==='despesa').reduce((s,t)=>s+t.val,0);
+    const catTotals={};
+    txs.filter(t=>t.type==='despesa').forEach(t=>{catTotals[t.cat]=(catTotals[t.cat]||0)+t.val;});
+    const topCats=Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const summary={mes:MONTHS[curMonth]+' '+curYear,receitas:rec,despesas:desp,saldo:rec-desp,totalTx:txs.length,topCategorias:topCats.map(([c,v])=>c+': R$'+v.toFixed(2)),contas:DB.accounts.map(a=>a.name+': R$'+a.balance.toFixed(2))};
+
+    const prompt=`Você é um assistente financeiro pessoal. Analise estes dados financeiros e retorne APENAS JSON sem markdown:
+${JSON.stringify(summary)}
+
+Retorne: {"insights":[{"tipo":"aviso|dica|positivo","titulo":"título curto","texto":"explicação em 1-2 frases diretas e práticas em português","icon":"emoji"}]}
+
+Gere 3-4 insights relevantes e práticos. Seja direto, específico e útil. Tipos: aviso=gasto alto/problema, dica=sugestão de melhoria, positivo=ponto positivo.`;
+
+    const resp=await fetch('https://financas-proxy.chrisbertolinoo9.workers.dev/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:800,messages:[{role:'user',content:prompt}]})
+    });
+    const data=await resp.json();
+    if(data.error) throw new Error(data.error.message);
+    const raw=data.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(raw);
+    const insights=parsed.insights||[];
+
+    const colors={aviso:'var(--yellow)',dica:'var(--cyan)',positivo:'var(--green)'};
+    const bgColors={aviso:'rgba(245,158,11,.08)',dica:'rgba(6,182,212,.08)',positivo:'rgba(34,197,94,.08)'};
+    const borders={aviso:'rgba(245,158,11,.2)',dica:'rgba(6,182,212,.2)',positivo:'rgba(34,197,94,.2)'};
+
+    const html_content=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:16px;">🧠</div>
+          <div><div style="font-size:13px;font-weight:700;">Insights — ${MONTHS[curMonth]}</div><div style="font-size:10px;color:var(--muted);">Análise automática da IA</div></div>
+        </div>
+        <button onclick="_insightsCache=null;renderInsights()" style="background:none;border:1px solid var(--border);border-radius:7px;padding:4px 10px;color:var(--muted);font-family:'Sora',sans-serif;font-size:10px;font-weight:600;cursor:pointer;" title="Atualizar">↻ Atualizar</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+        ${insights.map(ins=>`
+        <div style="background:${bgColors[ins.tipo]||'var(--bg3)'};border:1px solid ${borders[ins.tipo]||'var(--border)'};border-radius:10px;padding:14px;">
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+            <span style="font-size:18px;">${ins.icon||'💡'}</span>
+            <div style="font-size:12px;font-weight:700;color:${colors[ins.tipo]||'var(--text)'};">${ins.titulo}</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">${ins.texto}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+
+    _insightsCache=html_content;
+    _insightsMonth=monthKey;
+    box.innerHTML=html_content;
+  }catch(e){
+    console.warn('Insights error:',e);
+    box.style.display='none';
+  }finally{
+    _insightsLoading=false;
+  }
 }
 
 // ════════════════════════════════════════════════
@@ -1573,8 +1747,10 @@ function renderCards(){
   const el=document.getElementById('ccList');
   el.innerHTML=DB.cards.length?DB.cards.map(c=>{
     const spent=cardMonthSpend(c.id);
-    const pct=c.limit>0?Math.min(Math.round(spent/c.limit*100),100):0;
-    const avail=Math.max(c.limit-spent,0);
+    const isPrep=c.type==='prepago';
+    const limitBase=isPrep?(c.balance||c.limit):c.limit;
+    const pct=limitBase>0?Math.min(Math.round(spent/limitBase*100),100):0;
+    const avail=Math.max(limitBase-spent,0);
     return `<div class="cci" style="position:relative;" id="cc-${c.id}">
       <div onclick="openInvoice('${c.id}')" style="flex:1;">
         <div class="cc-top">
@@ -1594,6 +1770,7 @@ function renderCards(){
         <div class="pm-item" onclick="closeAllMenus();openInvoice('${c.id}')"><span class="pm-ico">📄</span>Ver fatura</div>
         <div class="pm-item" onclick="closeAllMenus();filterCardTx('${c.id}')"><span class="pm-ico">⇄</span>Transações</div>
         <div class="pm-item" onclick="closeAllMenus();openTxModal(null,'${c.id}')"><span class="pm-ico">＋</span>Novo lançamento</div>
+        ${c.type==='prepago'?`<div class="pm-item" onclick="openLoadSaldo('${c.id}')"><span class="pm-ico">💳</span>Carregar Saldo</div>`:''}
         <div style="height:1px;background:var(--border);margin:4px 0;"></div>
         <div class="pm-item danger" onclick="closeAllMenus();confirmDelItem('card','${c.id}','cartão &quot;${c.name}&quot;')"><span class="pm-ico">🗑</span>Excluir cartão</div>
       </div>
@@ -1648,7 +1825,7 @@ function openInvoice(cardId){
   document.getElementById('invSummaryBox').innerHTML=`
     <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Fatura</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--purple);">R$ ${fmt(spent)}</div></div>
     <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Utilizado</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:${pct>80?'var(--red)':'var(--yellow)'};">${pct}%</div></div>
-    <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Disponível</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--green);">R$ ${fmt(Math.max(card.limit-spent,0))}</div></div>`;
+    <div style="background:var(--bg3);border-radius:9px;padding:12px;text-align:center;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:700;text-transform:uppercase;">Disponível</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--green);">R$ ${fmt(Math.max((card.type==='prepago'?(card.balance||card.limit):card.limit)-spent,0))}</div></div>`;
 
   const tl=document.getElementById('invTxList');
   tl.innerHTML=txs.length?txs.map(t=>`
@@ -1767,6 +1944,7 @@ function saveTx(){
   const editId=document.getElementById('txEditId').value;
   if(!desc||!val||!dateISO){ toast('Preencha todos os campos','var(--yellow)'); return; }
   const type=_txTab==='transferencia'?'despesa':_txTab;
+  learnCategory(desc,cat);
   const obj={id:editId||'tx'+Date.now(),name:desc,cat,type,val,dateISO,date:isoToDisplay(dateISO),icon:C_ICON[cat]||'💰',color:C_COLOR[cat]||'#6b7591',accId:accId||null,cardId:null};
   if(editId){ const i=DB.transactions.findIndex(x=>x.id===editId); if(i>=0)DB.transactions[i]=obj; }
   else DB.transactions.unshift(obj);
@@ -1841,14 +2019,59 @@ function openCardModal(editId=null){
 }
 function closeCard(){ document.getElementById('cardOv').classList.remove('on'); }
 function selCardColor(el){ _selCardColor=el.dataset.color; document.querySelectorAll('.card-color-opt').forEach(e=>e.style.border='2px solid transparent'); el.style.border='2px solid white'; }
+function toggleCardTypeFields(type){
+  const isPrep=type==='prepago';
+  const lbl=document.getElementById('cardLimitLbl');
+  const creditF=document.getElementById('cardCreditFields');
+  const cashF=document.getElementById('cardCashbackField');
+  if(lbl) lbl.textContent=isPrep?'Saldo Inicial (R$)':'Limite Total (R$)';
+  if(creditF) creditF.style.display=isPrep?'none':'grid';
+  if(cashF) cashF.style.display=isPrep?'block':'none';
+}
+
+function openLoadSaldo(cardId){
+  const c=DB.cards.find(x=>x.id===cardId);
+  if(!c) return;
+  document.getElementById('loadSaldoCardId').value=cardId;
+  document.getElementById('loadSaldoCardName').textContent='Cartão: '+c.name;
+  document.getElementById('loadSaldoVal').value='';
+  document.getElementById('loadSaldoDate').value=todayISO();
+  document.getElementById('loadSaldoOv').classList.add('on');
+  closeAllMenus();
+}
+
+function saveLoadSaldo(){
+  const cardId=document.getElementById('loadSaldoCardId').value;
+  const val=parseFloat(document.getElementById('loadSaldoVal').value)||0;
+  const dateISO=document.getElementById('loadSaldoDate').value;
+  if(!val){ toast('Informe o valor','var(--yellow)'); return; }
+  const c=DB.cards.find(x=>x.id===cardId);
+  if(!c) return;
+  // Increase card balance/limit
+  c.balance=(c.balance||0)+val;
+  c.limit=c.balance;
+  // Register as income transaction linked to card
+  DB.transactions.unshift({
+    id:'tx'+Date.now(),name:'Carga de saldo — '+c.name,
+    cat:'Outros',type:'receita',val,
+    dateISO,date:isoToDisplay(dateISO),
+    icon:'💳',color:'#22c55e',accId:null,cardId
+  });
+  saveDB();renderAll();
+  document.getElementById('loadSaldoOv').classList.remove('on');
+  toast('✓ R$ '+fmt(val)+' carregados em '+c.name,'#22c55e');
+}
+
 function saveCard(){
   const name=document.getElementById('cardName').value.trim();
   const brand=document.getElementById('cardBrand').value;
+  const type=document.getElementById('cardType')?.value||'credito';
   const limit=parseFloat(document.getElementById('cardLimit').value)||0;
   const due=parseInt(document.getElementById('cardDue').value)||1;
+  const cashback=parseFloat(document.getElementById('cardCashback')?.value)||0;
   const editId=document.getElementById('cardEditId').value;
   if(!name){ toast('Informe o nome do cartão','var(--yellow)'); return; }
-  const obj={id:editId||'card'+Date.now(),name,brand,limit,due,color:_selCardColor};
+  const obj={id:editId||'card'+Date.now(),name,brand,type,limit,balance:type==='prepago'?limit:0,due,color:_selCardColor,cashback};
   if(editId){ const i=DB.cards.findIndex(x=>x.id===editId); if(i>=0)DB.cards[i]=obj; }
   else DB.cards.push(obj);
   saveDB(); renderAll(); closeCard();
@@ -2049,7 +2272,11 @@ function buildReview(extracted){
   _pendRows=extracted.transactions.map((t,i)=>{
     const dateParts=(t.date||'').split('/');
     const dateISO=dateParts.length===2?`${year}-${month}-${dateParts[0].padStart(2,'0')}`:todayISO();
-    return{...t,_id:i,_sel:!isDup(t),_dup:isDup(t),dateISO};
+    // Apply smart category if AI gave generic "Outros" or nothing
+    const smart=smartCategoryGuess(t.name);
+    const finalCat=((!t.cat||t.cat==='Outros')&&smart)?smart.cat:t.cat;
+    const finalIcon=((!t.icon||t.icon==='💰')&&smart)?smart.icon:t.icon;
+    return{...t,cat:finalCat||t.cat,icon:finalIcon||t.icon,_id:i,_sel:!isDup(t),_dup:isDup(t),dateISO};
   });
   renderReview();
   const total=_pendRows.length,dups=_pendRows.filter(r=>r._dup).length,sel=_pendRows.filter(r=>r._sel).length;
@@ -2077,7 +2304,14 @@ function renderReview(){
     </div>`).join('');
 }
 function togRow(i){_pendRows[i]._sel=!_pendRows[i]._sel;renderReview();updImpBtn();}
-function updRow(i,f,v){_pendRows[i][f]=v;if(f==='cat'){_pendRows[i].icon=C_ICON[v]||'💰';}}
+function updRow(i,f,v){
+  _pendRows[i][f]=v;
+  if(f==='cat'){
+    _pendRows[i].icon=C_ICON[v]||'💰';
+    // Learn from correction
+    learnCategory(_pendRows[i].name,v);
+  }
+}
 
 function onCatChange(sel,i){
   if(sel.value==='__new__'){
