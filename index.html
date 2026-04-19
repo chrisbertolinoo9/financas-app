@@ -591,12 +591,16 @@ select.fi option{background:var(--card2);color:var(--text);}
     <div class="ni" onclick="gv('relatorios')"><span class="ni-ico">↗</span>Relatórios</div>
   </div>
   <div class="sb-foot">
-    <div class="sb-user">
+    <div class="sb-user" onclick="openProfileModal()" style="cursor:pointer;" title="Clique para gerenciar perfil">
       <div class="sb-av">CB</div>
-      <div><div class="sb-uname" id="sbName">Christian B.</div><div class="sb-uplan">⭐ Premium</div></div>
-      <button class="sb-logout" onclick="doLogout()" title="Sair">⏻</button>
+      <div style="flex:1;min-width:0;">
+        <div class="sb-uname" id="sbName">Christian B.</div>
+        <div class="sb-uplan" id="sbPlan">⭐ Premium · Local</div>
+      </div>
+      <button class="sb-logout" onclick="event.stopPropagation();doLogout()" title="Sair">⏻</button>
     </div>
-    <button onclick="confirmClearAll()" style="width:100%;margin-top:7px;padding:7px;background:transparent;border:1px solid rgba(239,68,68,.15);border-radius:8px;color:var(--muted);font-family:'Sora',sans-serif;font-size:10px;font-weight:600;cursor:pointer;transition:all .18s;" onmouseover="this.style.color='var(--red)';this.style.borderColor='rgba(239,68,68,.4)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='rgba(239,68,68,.15)'">🗑 Limpar todos os dados</button>
+    <button id="cloudLinkBtn" onclick="openProfileModal()" style="width:100%;margin-top:7px;padding:7px;background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(6,182,212,.1));border:1px solid rgba(99,102,241,.25);border-radius:8px;color:var(--accent);font-family:'Sora',sans-serif;font-size:10px;font-weight:700;cursor:pointer;transition:all .18s;">☁️ Vincular à nuvem — acesse em qualquer device</button>
+    <button onclick="confirmClearAll()" style="width:100%;margin-top:5px;padding:7px;background:transparent;border:1px solid rgba(239,68,68,.15);border-radius:8px;color:var(--muted);font-family:'Sora',sans-serif;font-size:10px;font-weight:600;cursor:pointer;transition:all .18s;" onmouseover="this.style.color='var(--red)';this.style.borderColor='rgba(239,68,68,.4)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='rgba(239,68,68,.15)'">🗑 Limpar todos os dados</button>
   </div>
 </nav>
 
@@ -1199,6 +1203,51 @@ select.fi option{background:var(--card2);color:var(--text);}
           <button class="bs acc" style="flex:none;padding:10px 20px;" onclick="resetImport()">📷 Importar Mais</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PERFIL / VINCULAR NUVEM -->
+<div class="ov" id="profileOv" onclick="if(event.target.id==='profileOv')closeProfile()">
+  <div class="md" style="max-width:420px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div class="md-title" style="margin:0;">👤 Perfil & Nuvem</div>
+      <button onclick="closeProfile()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;">✕</button>
+    </div>
+
+    <!-- Status atual -->
+    <div id="profileStatus" style="padding:14px;border-radius:12px;border:1px solid var(--border);background:var(--bg3);margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:28px;" id="profileStatusIcon">💾</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;" id="profileStatusTitle">Armazenamento Local</div>
+          <div style="font-size:11px;color:var(--muted);" id="profileStatusSub">Dados salvos apenas neste dispositivo</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulário vincular -->
+    <div id="profileLinkForm">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">☁️ Vincular à nuvem</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.6;">Crie uma conta ou entre com e-mail existente para sincronizar seus dados em qualquer dispositivo. Seus dados atuais serão migrados automaticamente.</div>
+      <div class="fg"><label class="fl">E-mail</label><input class="fi" id="profileEmail" type="email" placeholder="seu@email.com"></div>
+      <div class="fg"><label class="fl">Senha</label><input class="fi" id="profilePass" type="password" placeholder="Mínimo 6 caracteres"></div>
+      <div id="profileErr" style="display:none;font-size:11px;color:var(--red);margin-bottom:10px;padding:8px;background:rgba(239,68,68,.08);border-radius:7px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+        <button onclick="linkToCloud('login')" style="padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">Já tenho conta</button>
+        <button onclick="linkToCloud('register')" style="padding:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:9px;color:#fff;font-family:'Sora',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">Criar conta ☁️</button>
+      </div>
+    </div>
+
+    <!-- Já vinculado -->
+    <div id="profileLinked" style="display:none;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;color:var(--green);">✅ Conta vinculada à nuvem!</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Seus dados sincronizam automaticamente em todos os dispositivos.</div>
+      <div style="font-size:11px;color:var(--muted);padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);">
+        <div>📧 E-mail: <strong id="profileEmailDisplay">—</strong></div>
+        <div style="margin-top:4px;">🕐 Última sincronização: <strong id="profileLastSync">agora</strong></div>
+      </div>
+      <button onclick="forceSyncNow()" style="width:100%;margin-top:10px;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--accent);font-family:'Sora',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">↻ Sincronizar agora</button>
     </div>
   </div>
 </div>
@@ -3364,6 +3413,130 @@ async function doLogout(){
 // ════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════
+// ════════════════════════════════════════════════
+// PROFILE & CLOUD LINKING
+// ════════════════════════════════════════════════
+function openProfileModal(){
+  const ov=document.getElementById('profileOv');
+  const linked=!!window._fbUser;
+  // Update status
+  document.getElementById('profileStatusIcon').textContent=linked?'☁️':'💾';
+  document.getElementById('profileStatusTitle').textContent=linked?'Sincronizado na nuvem':'Armazenamento Local';
+  document.getElementById('profileStatusSub').textContent=linked?
+    ('Conta: '+(window._fbUser.email||'—')):
+    'Dados salvos apenas neste dispositivo';
+  document.getElementById('profileLinkForm').style.display=linked?'none':'block';
+  document.getElementById('profileLinked').style.display=linked?'block':'none';
+  if(linked){
+    document.getElementById('profileEmailDisplay').textContent=window._fbUser.email||'—';
+  }
+  document.getElementById('profileErr').style.display='none';
+  ov.classList.add('on');
+}
+
+function closeProfile(){
+  document.getElementById('profileOv').classList.remove('on');
+}
+
+async function linkToCloud(mode){
+  const email=document.getElementById('profileEmail').value.trim();
+  const pass=document.getElementById('profilePass').value;
+  const errEl=document.getElementById('profileErr');
+  errEl.style.display='none';
+  if(!email||!pass){errEl.textContent='Preencha e-mail e senha.';errEl.style.display='block';return;}
+  if(pass.length<6){errEl.textContent='Senha deve ter pelo menos 6 caracteres.';errEl.style.display='block';return;}
+
+  try{
+    const {createUserWithEmailAndPassword,signInWithEmailAndPassword}=
+      await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
+
+    let cred;
+    if(mode==='register'){
+      cred=await createUserWithEmailAndPassword(window._fbAuth,email,pass);
+    } else {
+      cred=await signInWithEmailAndPassword(window._fbAuth,email,pass);
+    }
+
+    window._fbUser=cred.user;
+
+    // Check if there's already cloud data
+    const snap=await window._fbGetDoc(window._fbDoc(window._fbDb,'users',cred.user.uid));
+    if(snap.exists() && snap.data().db && mode==='login'){
+      // Ask user which data to keep
+      const keepCloud=confirm('Encontramos dados na nuvem. OK = usar dados da nuvem. Cancelar = manter dados locais');
+      if(keepCloud){
+        await loadCloudData(cred.user.uid);
+        renderAll();
+      } else {
+        await syncToCloudNow(cred.user.uid);
+      }
+    } else {
+      // No cloud data yet — upload local data
+      await syncToCloudNow(cred.user.uid);
+    }
+
+    // Update session with uid
+    const sess=JSON.parse(sessionStorage.getItem('fp_user')||'{}');
+    sess.uid=cred.user.uid;
+    sess.email=email;
+    sessionStorage.setItem('fp_user',JSON.stringify(sess));
+
+    // Update UI
+    document.getElementById('sbPlan').textContent='☁️ Sincronizado';
+    document.getElementById('cloudLinkBtn').textContent='☁️ Conta vinculada';
+    document.getElementById('cloudLinkBtn').style.background='linear-gradient(135deg,rgba(34,197,94,.1),rgba(6,182,212,.1))';
+    document.getElementById('cloudLinkBtn').style.borderColor='rgba(34,197,94,.25)';
+    document.getElementById('cloudLinkBtn').style.color='var(--green)';
+
+    openProfileModal(); // refresh modal
+    toast('✓ Conta vinculada! Dados sincronizados ☁️','#22c55e');
+
+  }catch(e){
+    const codes={
+      'auth/email-already-in-use':'E-mail já cadastrado. Use "Já tenho conta".',
+      'auth/wrong-password':'Senha incorreta.',
+      'auth/user-not-found':'Usuário não encontrado.',
+      'auth/invalid-email':'E-mail inválido.',
+      'auth/invalid-credential':'E-mail ou senha incorretos.'
+    };
+    errEl.textContent=codes[e.code]||'Erro: '+e.message;
+    errEl.style.display='block';
+  }
+}
+
+async function syncToCloudNow(uid){
+  if(!window._fbDb) return;
+  try{
+    await window._fbSetDoc(window._fbDoc(window._fbDb,'users',uid||window._fbUser?.uid),{
+      db:JSON.stringify(DB),
+      updatedAt:Date.now()
+    });
+  }catch(e){ console.warn('Sync error:',e); }
+}
+
+async function forceSyncNow(){
+  if(!window._fbUser){ toast('Nenhuma conta vinculada','var(--yellow)'); return; }
+  await syncToCloudNow(window._fbUser.uid);
+  document.getElementById('profileLastSync').textContent='agora mesmo';
+  toast('✓ Dados sincronizados!','#22c55e');
+}
+
+// Update cloud status on auth change
+window._onFbAuthChange=(user)=>{
+  if(user){
+    window._fbUser=user;
+    const btn=document.getElementById('cloudLinkBtn');
+    if(btn){
+      btn.textContent='☁️ Conta vinculada — '+user.email;
+      btn.style.background='linear-gradient(135deg,rgba(34,197,94,.1),rgba(6,182,212,.1))';
+      btn.style.borderColor='rgba(34,197,94,.25)';
+      btn.style.color='var(--green)';
+    }
+    const plan=document.getElementById('sbPlan');
+    if(plan) plan.textContent='☁️ Sincronizado';
+  }
+};
+
 if(chkSession()){
   try{ const s=JSON.parse(sessionStorage.getItem(SK));enterApp(s.name); }catch(e){}
 } else {
