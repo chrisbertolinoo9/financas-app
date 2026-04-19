@@ -600,6 +600,7 @@ select.fi option{background:var(--card2);color:var(--text);}
     <div class="ni" onclick="gv('transacoes')"><span class="ni-ico">⇄</span>Transações<span class="ni-badge" id="txBadge">0</span></div>
     <div class="ni" onclick="gv('cartoes')"><span class="ni-ico">▭</span>Cartões</div>
     <div class="ni" onclick="gv('planejamento')"><span class="ni-ico">◎</span>Planejamento</div>
+    <div class="ni" onclick="gv('financiamentos')"><span class="ni-ico">🏠</span>Financiamentos</div>
     <div class="ni" onclick="gv('relatorios')"><span class="ni-ico">↗</span>Relatórios</div>
   </div>
   <div class="sb-foot">
@@ -648,6 +649,9 @@ select.fi option{background:var(--card2);color:var(--text);}
     </button>
     <button onclick="gv('relatorios');setMobileNav('relatorios');closeMobileMenu()" style="padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
       <span style="font-size:22px;">↗</span>Relatórios
+    </button>
+    <button onclick="gv('financiamentos');setMobileNav('financiamentos');closeMobileMenu()" style="padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <span style="font-size:22px;">🏠</span>Financiamentos
     </button>
     <button onclick="openImport();closeMobileMenu()" style="padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
       <span style="font-size:22px;">📷</span>Importar
@@ -800,10 +804,96 @@ select.fi option{background:var(--card2);color:var(--text);}
       </div>
     </div>
 
+    <!-- FINANCIAMENTOS -->
+    <div class="view" id="view-financiamentos">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div>
+          <div style="font-size:18px;font-weight:800;">Financiamentos</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:3px;">Controle de imóveis e empréstimos</div>
+        </div>
+        <button class="sb-new" style="width:auto;margin:0;padding:10px 16px;font-size:12px;" onclick="openLoanModal()">+ Novo Financiamento</button>
+      </div>
+      <div id="loansEmpty" style="display:none;text-align:center;padding:60px 20px;">
+        <div style="font-size:48px;margin-bottom:12px;">🏠</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px;">Nenhum financiamento cadastrado</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:20px;">Adicione seu financiamento para acompanhar o saldo devedor, juros e simulações de amortização.</div>
+        <button class="sb-new" style="width:auto;margin:0 auto;padding:12px 24px;" onclick="openLoanModal()">+ Adicionar Financiamento</button>
+      </div>
+      <div id="loansList"></div>
+    </div>
+
   </div><!-- end content -->
 </main>
 
 </div><!-- end appWrap -->
+
+<!-- MODAL: FINANCIAMENTO -->
+<div class="ov" id="loanOv" onclick="if(event.target.id==='loanOv')closeLoanModal()">
+  <div class="md" style="max-width:520px;">
+    <div class="md-title" id="loanMdTitle">Novo Financiamento</div>
+    <div class="md-sub">Cadastre um financiamento imobiliário ou empréstimo</div>
+    <input type="hidden" id="loanEditId">
+    <div class="fr">
+      <div class="fg"><label class="fl">Nome</label><input class="fi" id="lnName" placeholder="Ex: Apartamento CAIXA"></div>
+      <div class="fg"><label class="fl">Banco</label><input class="fi" id="lnBank" placeholder="Ex: Caixa Econômica"></div>
+    </div>
+    <div class="fg"><label class="fl">Nº do Contrato</label><input class="fi" id="lnContract" placeholder="Ex: 144442663854-1"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Valor Financiado (R$)</label><input class="fi" id="lnFinanced" type="number" placeholder="360000" step="0.01"></div>
+      <div class="fg"><label class="fl">Prazo Total (meses)</label><input class="fi" id="lnMonths" type="number" placeholder="420"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Taxa Nominal a.a. (%)</label><input class="fi" id="lnRate" type="number" placeholder="10.0" step="0.01"></div>
+      <div class="fg"><label class="fl">Sistema</label>
+        <select class="fi" id="lnSystem">
+          <option value="SAC">SAC — amortização constante</option>
+          <option value="PRICE">PRICE — parcela fixa</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Data 1ª parcela</label><input class="fi" id="lnStart" type="date"></div>
+      <div class="fg"><label class="fl">Parcela atual paga</label><input class="fi" id="lnCurrentMonth" type="number" placeholder="1" min="0"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Saldo Devedor Atual (R$)</label><input class="fi" id="lnDebt" type="number" placeholder="360651.23" step="0.01"></div>
+      <div class="fg"><label class="fl">Valor da Prestação (R$)</label><input class="fi" id="lnInstallment" type="number" placeholder="3196.29" step="0.01"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label class="fl">Seguro Mensal (R$)</label><input class="fi" id="lnInsurance" type="number" placeholder="70.94" step="0.01"></div>
+      <div class="fg"><label class="fl">Taxa Operacional (R$)</label><input class="fi" id="lnOpFee" type="number" placeholder="25.00" step="0.01"></div>
+    </div>
+    <div class="md-actions">
+      <button class="md-cancel" onclick="closeLoanModal()">Cancelar</button>
+      <button class="md-save" onclick="saveLoan()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: SIMULAÇÃO DE AMORTIZAÇÃO -->
+<div class="ov" id="loanSimOv" onclick="if(event.target.id==='loanSimOv')closeLoanSim()">
+  <div class="md" style="max-width:560px;max-height:85vh;overflow-y:auto;">
+    <div class="md-title">📊 Simulação de Amortização</div>
+    <div class="md-sub" id="loanSimSub">Simule o impacto de um pagamento extra</div>
+    <div class="fr" style="margin-bottom:16px;">
+      <div class="fg">
+        <label class="fl">Valor do aporte extra (R$)</label>
+        <input class="fi" id="simExtra" type="number" placeholder="0.00" step="100" oninput="runSim()">
+      </div>
+      <div class="fg">
+        <label class="fl">Tipo de simulação</label>
+        <select class="fi" id="simType" onchange="runSim()">
+          <option value="reduce_time">Reduzir prazo (manter parcela)</option>
+          <option value="reduce_installment">Reduzir parcela (manter prazo)</option>
+        </select>
+      </div>
+    </div>
+    <div id="simResult"></div>
+    <div class="md-actions">
+      <button class="md-cancel" onclick="closeLoanSim()">Fechar</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL: NOVA/EDITAR TRANSAÇÃO -->
 <div class="ov" id="txOv" onclick="if(event.target.id==='txOv')closeTx()">
@@ -1307,6 +1397,7 @@ let DB = {
   accounts: [],      // {id,name,type,balance,initialBalance,color}
   cards: [],         // {id,name,brand,limit,due,color}
   planGoals: [],     // {id,cat,amount}
+  loans: [],         // {id,name,bank,contractNum,financedValue,downPayment,system,rateNominal,rateEffective,totalMonths,startDate,currentDebt,currentInstallment,insurance,opFee,notes}
 };
 
 const STORE_KEY = 'fp_db_v3';
@@ -1370,6 +1461,7 @@ function loadDB(){
         if(!Array.isArray(DB.accounts)) DB.accounts = [];
         if(!Array.isArray(DB.cards)) DB.cards = [];
         if(!Array.isArray(DB.planGoals)) DB.planGoals = [];
+        if(!Array.isArray(DB.loans)) DB.loans = [];
       }
     }
   }catch(e){ localStorage.removeItem(STORE_KEY); }
@@ -1464,7 +1556,7 @@ function learnCategory(name,cat){
 // ════════════════════════════════════════════════
 // NAV
 // ════════════════════════════════════════════════
-const VIEW_TITLES={dashboard:'Dashboard',contas:'Contas',transacoes:'Transações',cartoes:'Cartões de Crédito',planejamento:'Planejamento',relatorios:'Relatórios'};
+const VIEW_TITLES={dashboard:'Dashboard',contas:'Contas',transacoes:'Transações',cartoes:'Cartões de Crédito',planejamento:'Planejamento',financiamentos:'Financiamentos',relatorios:'Relatórios'};
 
 function gv(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
@@ -1488,6 +1580,7 @@ function renderAll(){
   renderCards();
   renderPlan();
   renderReports();
+  renderLoans();
   updateTxBadge();
 }
 
@@ -3610,6 +3703,296 @@ if(chkSession()){
 } else {
   setTimeout(()=>document.getElementById('lu').focus(),300);
 }
+
+// ════════════════════════════════════════════════
+// FINANCIAMENTOS
+// ════════════════════════════════════════════════
+
+function renderLoans(){
+  if(!Array.isArray(DB.loans)) DB.loans=[];
+  const el=document.getElementById('loansList');
+  const empty=document.getElementById('loansEmpty');
+  if(!el) return;
+  if(DB.loans.length===0){ el.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  el.innerHTML = DB.loans.map(l=>{
+    const paidMonths = l.currentMonth||0;
+    const totalMonths = l.totalMonths||420;
+    const progress = Math.min(100, (paidMonths/totalMonths)*100);
+    const remaining = totalMonths - paidMonths;
+    const debt = l.currentDebt||0;
+    const financed = l.financedValue||0;
+    const paidPct = financed>0 ? Math.min(100,((financed-debt)/financed)*100) : 0;
+    const installment = l.currentInstallment||0;
+    const insurance = l.insurance||0;
+    const opFee = l.opFee||0;
+    const totalCost = installment+insurance+opFee;
+
+    // Projeção: juros totais estimados restantes (simplificado)
+    const monthlyRate = (l.rateNominal||10)/100/12;
+    let projInterest=0, projAmort=0, tmpDebt=debt;
+    const simSteps = Math.min(remaining, 600);
+    if(l.system==='SAC'){
+      const monthlyAmort = financed/totalMonths;
+      for(let i=0;i<simSteps;i++){
+        const ju = tmpDebt*monthlyRate;
+        projInterest+=ju;
+        projAmort+=monthlyAmort;
+        tmpDebt = Math.max(0,tmpDebt-monthlyAmort);
+      }
+    } else { // PRICE
+      for(let i=0;i<simSteps;i++){
+        const ju = tmpDebt*monthlyRate;
+        projInterest+=ju;
+        projAmort+=installment-ju;
+        tmpDebt = Math.max(0,tmpDebt-(installment-ju));
+      }
+    }
+
+    const yearsLeft = Math.floor(remaining/12);
+    const monthsLeft = remaining%12;
+    const dueStr = yearsLeft>0 ? `${yearsLeft}a ${monthsLeft}m` : `${monthsLeft}m`;
+
+    return `<div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;">
+            🏠 ${l.name}
+            <span style="font-size:10px;font-weight:600;background:rgba(59,130,246,.12);color:var(--blue);padding:3px 8px;border-radius:20px;">${l.system||'SAC'}</span>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">${l.bank||''} ${l.contractNum?'· Contrato '+l.contractNum:''}</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="openLoanSim('${l.id}')" style="padding:6px 12px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);border-radius:8px;color:var(--accent);font-family:'Sora',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">📊 Simular</button>
+          <button onclick="openLoanModal('${l.id}')" style="padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;">✏️</button>
+          <button onclick="deleteLoan('${l.id}')" style="padding:6px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);border-radius:8px;color:var(--red);font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;">🗑</button>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">Saldo Devedor</div>
+          <div style="font-size:20px;font-weight:800;color:var(--red);">${fmtBRL(debt)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">${fmtBRL(financed-debt)} quitado</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">Parcela Total</div>
+          <div style="font-size:20px;font-weight:800;color:var(--yellow);">${fmtBRL(totalCost)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">prestação + seguro + taxa</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">Prazo Restante</div>
+          <div style="font-size:20px;font-weight:800;">${dueStr}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">${remaining} parcelas · ${paidMonths} pagas</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">Juros Restantes Est.</div>
+          <div style="font-size:20px;font-weight:800;color:var(--muted2);">${fmtBRL(projInterest)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">taxa ${l.rateNominal||10}% a.a.</div>
+        </div>
+      </div>
+
+      <!-- Decomposição parcela -->
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;margin-bottom:10px;color:var(--muted2);">Decomposição da Parcela Atual</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          ${buildInstallmentBar('Amortização', installment - (debt*monthlyRate), installment, '#22c55e')}
+          ${buildInstallmentBar('Juros', debt*monthlyRate, installment, '#ef4444')}
+          ${buildInstallmentBar('Seguro', insurance, totalCost, '#f59e0b')}
+          ${buildInstallmentBar('Taxa Op.', opFee, totalCost, '#8b5cf6')}
+        </div>
+      </div>
+
+      <!-- Progresso -->
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px;">
+          <span>Progresso do Financiamento</span>
+          <span>${paidPct.toFixed(1)}% quitado</span>
+        </div>
+        <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden;">
+          <div style="height:100%;width:${paidPct}%;background:linear-gradient(90deg,var(--green),var(--cyan));border-radius:99px;transition:width .5s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px;">
+          <span>Parcela 1</span>
+          <span>Parcela ${paidMonths} atual</span>
+          <span>Parcela ${totalMonths}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function buildInstallmentBar(label, value, total, color){
+  const pct = total>0 ? Math.max(0,Math.min(100,(value/total)*100)) : 0;
+  return `<div style="display:flex;align-items:center;gap:10px;">
+    <div style="width:100px;font-size:11px;color:var(--muted);flex-shrink:0;">${label}</div>
+    <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden;">
+      <div style="height:100%;width:${pct.toFixed(1)}%;background:${color};border-radius:99px;"></div>
+    </div>
+    <div style="width:70px;font-size:11px;font-weight:700;text-align:right;color:${color};">${fmtBRL(Math.max(0,value))}</div>
+  </div>`;
+}
+
+function openLoanModal(id){
+  const ov=document.getElementById('loanOv');
+  document.getElementById('loanEditId').value=id||'';
+  document.getElementById('loanMdTitle').textContent=id?'Editar Financiamento':'Novo Financiamento';
+  if(id){
+    const l=DB.loans.find(x=>x.id===id);
+    if(l){
+      document.getElementById('lnName').value=l.name||'';
+      document.getElementById('lnBank').value=l.bank||'';
+      document.getElementById('lnContract').value=l.contractNum||'';
+      document.getElementById('lnFinanced').value=l.financedValue||'';
+      document.getElementById('lnMonths').value=l.totalMonths||'';
+      document.getElementById('lnRate').value=l.rateNominal||'';
+      document.getElementById('lnSystem').value=l.system||'SAC';
+      document.getElementById('lnStart').value=l.startDate||'';
+      document.getElementById('lnCurrentMonth').value=l.currentMonth||'';
+      document.getElementById('lnDebt').value=l.currentDebt||'';
+      document.getElementById('lnInstallment').value=l.currentInstallment||'';
+      document.getElementById('lnInsurance').value=l.insurance||'';
+      document.getElementById('lnOpFee').value=l.opFee||'';
+    }
+  } else {
+    // Pre-fill with CAIXA data as example (clear all)
+    ['lnName','lnBank','lnContract','lnFinanced','lnMonths','lnRate','lnStart','lnCurrentMonth','lnDebt','lnInstallment','lnInsurance','lnOpFee'].forEach(f=>{ document.getElementById(f).value=''; });
+    document.getElementById('lnSystem').value='SAC';
+  }
+  ov.classList.add('on');
+}
+
+function closeLoanModal(){ document.getElementById('loanOv').classList.remove('on'); }
+
+function saveLoan(){
+  const id=document.getElementById('loanEditId').value||('l'+Date.now());
+  const name=document.getElementById('lnName').value.trim();
+  if(!name){ toast('Informe o nome do financiamento','#ef4444'); return; }
+  const loan={
+    id, name,
+    bank: document.getElementById('lnBank').value.trim(),
+    contractNum: document.getElementById('lnContract').value.trim(),
+    financedValue: parseFloat(document.getElementById('lnFinanced').value)||0,
+    totalMonths: parseInt(document.getElementById('lnMonths').value)||420,
+    rateNominal: parseFloat(document.getElementById('lnRate').value)||10,
+    system: document.getElementById('lnSystem').value,
+    startDate: document.getElementById('lnStart').value,
+    currentMonth: parseInt(document.getElementById('lnCurrentMonth').value)||0,
+    currentDebt: parseFloat(document.getElementById('lnDebt').value)||0,
+    currentInstallment: parseFloat(document.getElementById('lnInstallment').value)||0,
+    insurance: parseFloat(document.getElementById('lnInsurance').value)||0,
+    opFee: parseFloat(document.getElementById('lnOpFee').value)||0,
+  };
+  if(!Array.isArray(DB.loans)) DB.loans=[];
+  const idx=DB.loans.findIndex(x=>x.id===id);
+  if(idx>=0) DB.loans[idx]=loan; else DB.loans.push(loan);
+  saveDB();
+  closeLoanModal();
+  renderLoans();
+  toast('✓ Financiamento salvo!','#22c55e');
+}
+
+function deleteLoan(id){
+  if(!confirm('Excluir este financiamento?')) return;
+  DB.loans=DB.loans.filter(x=>x.id!==id);
+  saveDB();
+  renderLoans();
+  toast('Financiamento excluído','#ef4444');
+}
+
+// ── SIMULAÇÃO DE AMORTIZAÇÃO ─────────────────────
+let _simLoanId=null;
+function openLoanSim(id){
+  _simLoanId=id;
+  const l=DB.loans.find(x=>x.id===id);
+  if(!l) return;
+  document.getElementById('loanSimSub').textContent=`${l.name} · Saldo devedor ${fmtBRL(l.currentDebt||0)}`;
+  document.getElementById('simExtra').value='';
+  document.getElementById('simType').value='reduce_time';
+  runSim();
+  document.getElementById('loanSimOv').classList.add('on');
+}
+function closeLoanSim(){ document.getElementById('loanSimOv').classList.remove('on'); _simLoanId=null; }
+
+function runSim(){
+  const l=DB.loans.find(x=>x.id===_simLoanId);
+  if(!l){ document.getElementById('simResult').innerHTML=''; return; }
+  const extra=parseFloat(document.getElementById('simExtra').value)||0;
+  const simType=document.getElementById('simType').value;
+  const monthlyRate=(l.rateNominal||10)/100/12;
+  const installment=l.currentInstallment||0;
+  const remaining=l.totalMonths-(l.currentMonth||0);
+
+  // Cenário SEM amortização
+  const {months:mBase, interest:iBase}=calcAmort(l.currentDebt||0, monthlyRate, installment, remaining, l.system||'SAC', l.financedValue||0, 0, 'reduce_time');
+  // Cenário COM amortização
+  const {months:mSim, interest:iSim, newInstallment:newInst}=calcAmort(l.currentDebt||0, monthlyRate, installment, remaining, l.system||'SAC', l.financedValue||0, extra, simType);
+
+  const savedMonths=mBase-mSim;
+  const savedInterest=iBase-iSim;
+  const yearsBase=Math.floor(mBase/12), mosBase=mBase%12;
+  const yearsSim=Math.floor(mSim/12), mosSim=mSim%12;
+
+  const hasExtra=extra>0;
+  document.getElementById('simResult').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">Sem amortização extra</div>
+        <div style="font-size:16px;font-weight:800;">${yearsBase}a ${mosBase}m</div>
+        <div style="font-size:11px;color:var(--red);margin-top:3px;">${fmtBRL(iBase)} em juros</div>
+      </div>
+      <div style="background:${hasExtra?'rgba(34,197,94,.06)':'var(--bg3)'};border:1px solid ${hasExtra?'rgba(34,197,94,.3)':'var(--border)'};border-radius:12px;padding:14px;">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">${hasExtra?'Com amortização extra':'Insira um valor acima'}</div>
+        <div style="font-size:16px;font-weight:800;color:${hasExtra?'var(--green)':'var(--muted)'};">${hasExtra?`${yearsSim}a ${mosSim}m`:'—'}</div>
+        <div style="font-size:11px;color:${hasExtra?'var(--green)':'var(--muted)'};margin-top:3px;">${hasExtra?fmtBRL(iSim)+' em juros':'—'}</div>
+      </div>
+    </div>
+    ${hasExtra?`
+    <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:12px;padding:16px;">
+      <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px;">✅ Economia com ${fmtBRL(extra)} de amortização</div>
+      <div style="display:flex;flex-direction:column;gap:7px;font-size:12px;">
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Meses economizados</span><span style="font-weight:700;color:var(--green);">${savedMonths} meses (${Math.floor(savedMonths/12)}a ${savedMonths%12}m)</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Juros economizados</span><span style="font-weight:700;color:var(--green);">${fmtBRL(savedInterest)}</span></div>
+        ${simType==='reduce_installment'?`<div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Nova parcela estimada</span><span style="font-weight:700;color:var(--cyan);">${fmtBRL(newInst)}</span></div>`:''}
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Retorno do aporte</span><span style="font-weight:700;color:var(--yellow);">${extra>0?(savedInterest/extra*100).toFixed(0)+'% sobre o valor':''}</span></div>
+      </div>
+    </div>`:''}
+  `;
+}
+
+function calcAmort(debt, rate, installment, remaining, system, financed, extraPayment, simType){
+  let d=debt-extraPayment;
+  if(d<0)d=0;
+  let interest=0, months=0;
+  const monthlyAmort=system==='SAC'?financed/(remaining+(debt===financed?0:0)):0;
+
+  let newInst=installment;
+  if(simType==='reduce_installment' && system==='PRICE' && d>0 && rate>0){
+    // Recalcula parcela PRICE com saldo reduzido e prazo original
+    newInst = d*rate*(Math.pow(1+rate,remaining))/(Math.pow(1+rate,remaining)-1);
+  }
+
+  for(let i=0;i<remaining+1;i++){
+    if(d<=0.01) break;
+    const ju=d*rate;
+    interest+=ju;
+    if(system==='SAC'){
+      const amort=financed/((remaining+(extraPayment>0?0:0)));
+      d=Math.max(0,d-amort);
+    } else {
+      const amort=newInst-ju;
+      d=Math.max(0,d-amort);
+    }
+    months++;
+    if(months>remaining) break;
+  }
+  return {months,interest,newInstallment:newInst};
+}
+
+// end loans
+
 </script>
 </body>
 </html>
