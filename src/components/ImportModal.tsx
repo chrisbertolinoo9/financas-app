@@ -203,28 +203,15 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
     const finalCardId = destType==='card' ? destId : null
     const finalAccId  = destType==='acc'  ? destId : null
 
-    // Monta todas as transacoes em batch
-    // Para transferencias: tenta encontrar par espelho ja existente no DB
-    // (mesma data, mesmo valor, type=transferencia, accId diferente)
-    // Se encontrar → vincula as duas contas automaticamente (toAccId <-> accId)
+    // Monta todas as transacoes em batch — sem auto-link entre contas
+    // Vinculo entre contas so acontece pelo modal de transferencia manual
     const allTxs = [...db.transactions]
     const newTxs: Transaction[] = []
     const patchedExisting: Map<string, Transaction> = new Map()
 
     toImp.forEach(r => {
       if (r.type === 'transferencia') {
-        // Busca par espelho: mesma data e valor, ja salvo em outra conta
-        const mirror = allTxs.find(t =>
-          t.type === 'transferencia' &&
-          t.dateISO === r.dateISO &&
-          Math.abs(t.val - r.val) < 0.02 &&
-          t.accId !== finalAccId &&
-          !t.toAccId // ainda nao vinculado
-        )
-
         const dir = r.dir || 'out'
-        // Transferencias importadas ficam sem toAccId para nao afetar saldo de outras contas.
-        // O vinculo entre contas so acontece pelo modal de transferencia manual.
         newTxs.push({
           id: genId(), name: r.name, cat: 'Transferência',
           type: 'transferencia' as const, val: r.val,
@@ -248,11 +235,6 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
         })
       }
     })
-
-    // Aplica patches nas transferencias existentes que foram vinculadas
-    const updatedExisting = allTxs.map(t =>
-      patchedExisting.has(t.id) ? patchedExisting.get(t.id)! : t
-    )
 
     // Gera parcelas futuras automaticamente para transacoes com padrao "Parcela X/N"
     const futureParcelas: Transaction[] = []
@@ -302,7 +284,7 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
       }
     })
 
-    save({ ...db, transactions: [...newTxs, ...futureParcelas, ...updatedExisting] })
+    save({ ...db, transactions: [...newTxs, ...futureParcelas, ...allTxs] })
     setImported(toImp.length + futureParcelas.length); setStep(4)
   }
 
