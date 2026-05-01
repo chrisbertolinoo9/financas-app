@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useDB } from '../contexts/DBContext'
-import { fmt, isoToDisplay, C_COLOR, C_ICON, todayISO, genId } from '../lib/utils'
+import { fmt, isoToDisplay, C_COLOR, C_ICON, todayISO, genId, inMonth } from '../lib/utils'
 import type { Transaction } from '../types'
 
 interface Props { curMonth: number; curYear: number }
@@ -14,6 +14,7 @@ export default function Transacoes({ curMonth, curYear }: Props) {
   const { db, addTransaction, updateTransaction, deleteTransaction } = useDB()
   const [search, setSearch] = useState('')
   const [typeF, setTypeF] = useState('')
+  const [showAll, setShowAll] = useState(false)
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState<string|null>(null)
   const [tab, setTab] = useState<'receita'|'despesa'|'transferencia'>('despesa')
@@ -22,34 +23,42 @@ export default function Transacoes({ curMonth, curYear }: Props) {
   const [date, setDate] = useState(todayISO())
   const [cat, setCat] = useState('Outros')
   const [accId, setAccId] = useState('')
-  const [cardId, setCardId] = useState('')
   const [delId, setDelId] = useState<string|null>(null)
 
-  const allTxs = useMemo(() =>
-    [...db.transactions].sort((a,b) => b.dateISO.localeCompare(a.dateISO)),
-    [db.transactions]
+  // Filtro por mês — respeita o mês selecionado no topbar
+  const monthTxs = useMemo(() =>
+    db.transactions.filter(t => inMonth(t.dateISO, curMonth, curYear)),
+    [db.transactions, curMonth, curYear]
+  )
+
+  // Modo "ver todas" ignora o filtro de mês
+  const baseTxs = useMemo(() =>
+    showAll
+      ? [...db.transactions].sort((a,b) => b.dateISO.localeCompare(a.dateISO))
+      : [...monthTxs].sort((a,b) => b.dateISO.localeCompare(a.dateISO)),
+    [db.transactions, monthTxs, showAll]
   )
 
   const filtered = useMemo(() => {
-    let txs = allTxs
+    let txs = baseTxs
     if (search) txs = txs.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.cat.toLowerCase().includes(search.toLowerCase()))
     if (typeF) txs = txs.filter(t => t.type === typeF)
     return txs
-  }, [allTxs, search, typeF])
+  }, [baseTxs, search, typeF])
+
+  const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
   function openNew() {
     setEditId(null); setTab('despesa'); setDesc(''); setVal('')
     setDate(todayISO()); setCat('Outros')
-    setAccId(db.accounts[0]?.id || ''); setCardId('')
-    setModal(true)
+    setAccId(db.accounts[0]?.id || ''); setModal(true)
   }
 
   function openEdit(t: Transaction) {
     setEditId(t.id)
     setTab(t.type === 'despesa' ? 'despesa' : t.type === 'receita' ? 'receita' : 'transferencia')
     setDesc(t.name); setVal(String(t.val)); setDate(t.dateISO)
-    setCat(t.cat); setAccId(t.accId || ''); setCardId(t.cardId || '')
-    setModal(true)
+    setCat(t.cat); setAccId(t.accId || ''); setModal(true)
   }
 
   function save() {
@@ -63,8 +72,8 @@ export default function Transacoes({ curMonth, curYear }: Props) {
       dateISO: date, date: isoToDisplay(date),
       icon: C_ICON[cat] || '💰',
       color: C_COLOR[cat] || '#6b7591',
-      accId: cardId ? null : (accId || null),
-      cardId: cardId || null,
+      accId: accId || null,
+      cardId: null,
     }
     if (editId) updateTransaction(obj)
     else addTransaction(obj)
@@ -96,6 +105,11 @@ export default function Transacoes({ curMonth, curYear }: Props) {
           <option value="receita">Receitas</option>
           <option value="despesa">Despesas</option>
         </select>
+        {/* Toggle mês atual / todos */}
+        <button onClick={() => setShowAll(v => !v)}
+          style={{ padding:'8px 14px', borderRadius:9, border:'1px solid var(--border)', background: showAll ? 'var(--glow)' : 'transparent', color: showAll ? 'var(--accent)' : 'var(--muted)', fontFamily:'Sora,sans-serif', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+          {showAll ? '📅 Todos os meses' : `📅 ${MONTHS[curMonth]} ${curYear}`}
+        </button>
         <div className="ml-auto">
           <button onClick={openNew} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white"
             style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent2))', border: 'none', cursor: 'pointer', fontFamily: 'Sora, sans-serif' }}>
@@ -107,8 +121,15 @@ export default function Transacoes({ curMonth, curYear }: Props) {
       {/* Lista */}
       <div className="rounded-2xl p-5" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
         <div className="flex items-center justify-between mb-4">
-          <div className="text-sm font-bold">Transações</div>
-          <div className="text-xs" style={{ color: 'var(--muted)' }}>{filtered.length} registro{filtered.length !== 1 ? 's' : ''}</div>
+          <div className="text-sm font-bold">
+            Transações {!showAll && <span style={{color:'var(--accent)',fontWeight:700}}>— {MONTHS[curMonth]} {curYear}</span>}
+          </div>
+          <div className="text-xs" style={{ color: 'var(--muted)' }}>
+            {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
+            {!showAll && db.transactions.length !== filtered.length && (
+              <span style={{color:'var(--muted)',marginLeft:6}}>de {db.transactions.length} total</span>
+            )}
+          </div>
         </div>
         <div className="flex flex-col gap-0.5">
           {filtered.length ? filtered.map(t => (
@@ -130,30 +151,23 @@ export default function Transacoes({ curMonth, curYear }: Props) {
                 </div>
                 <div className="text-xs" style={{ color: 'var(--muted)' }}>{isoToDisplay(t.dateISO)}</div>
               </div>
-              {/* Ações */}
               <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-1"
                 style={{ background: 'var(--bg3)', borderRadius: 7, padding: 3 }}>
                 <button onClick={() => openEdit(t)}
-                  className="w-6 h-6 rounded flex items-center justify-center text-xs transition-colors"
-                  style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>✏️</button>
+                  style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', width:24, height:24, borderRadius:5, fontSize:12 }}>✏️</button>
                 <button onClick={() => setDelId(t.id)}
-                  className="w-6 h-6 rounded flex items-center justify-center text-xs"
-                  style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,.12)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>🗑</button>
+                  style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', width:24, height:24, borderRadius:5, fontSize:12 }}>🗑</button>
               </div>
             </div>
           )) : (
             <div className="text-center py-10 text-xs" style={{ color: 'var(--muted)' }}>
-              Nenhuma transação encontrada
+              {showAll ? 'Nenhuma transação encontrada' : `Nenhuma transação em ${MONTHS[curMonth]} ${curYear}`}
             </div>
           )}
         </div>
       </div>
 
-      {/* Modal Nova/Editar Transação */}
+      {/* Modal Nova/Editar */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,.75)', backdropFilter: 'blur(8px)' }}
@@ -161,8 +175,6 @@ export default function Transacoes({ curMonth, curYear }: Props) {
           <div className="w-full max-w-md rounded-2xl p-6" style={{ background: 'var(--card2)', border: '1px solid var(--border)', animation: 'mdIn .2s ease' }}>
             <div className="text-base font-bold mb-1">{editId ? 'Editar' : 'Nova'} Transação</div>
             <div className="text-xs mb-4" style={{ color: 'var(--muted)' }}>Registre receita, despesa ou transferência</div>
-
-            {/* Tabs */}
             <div className="flex gap-1.5 mb-4">
               {(['receita','despesa','transferencia'] as const).map(t => (
                 <button key={t} onClick={() => setTab(t)} style={tabStyle(t)}>
@@ -170,7 +182,6 @@ export default function Transacoes({ curMonth, curYear }: Props) {
                 </button>
               ))}
             </div>
-
             <div className="flex flex-col gap-3">
               <div>
                 <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color: 'var(--muted)' }}>Descrição</label>
@@ -202,10 +213,9 @@ export default function Transacoes({ curMonth, curYear }: Props) {
                 </div>
               </div>
             </div>
-
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setModal(false)} style={{ flex: 1, padding: '11px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: '9px', color: 'var(--muted)', fontFamily: 'Sora, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={save} style={{ flex: 2, padding: '11px', background: tab === 'receita' ? 'linear-gradient(135deg,#22c55e,#16a34a)' : tab === 'despesa' ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'linear-gradient(135deg,var(--accent),var(--accent2))', border: 'none', borderRadius: '9px', color: '#fff', fontFamily: 'Sora, sans-serif', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+              <button onClick={() => setModal(false)} style={{ flex:1, padding:'11px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:'9px', color:'var(--muted)', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:600, cursor:'pointer' }}>Cancelar</button>
+              <button onClick={save} style={{ flex:2, padding:'11px', background: tab==='receita'?'linear-gradient(135deg,#22c55e,#16a34a)':tab==='despesa'?'linear-gradient(135deg,#ef4444,#dc2626)':'linear-gradient(135deg,var(--accent),var(--accent2))', border:'none', borderRadius:'9px', color:'#fff', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:700, cursor:'pointer' }}>
                 Salvar {tab === 'receita' ? 'Receita' : tab === 'despesa' ? 'Despesa' : 'Transferência'}
               </button>
             </div>
@@ -213,16 +223,16 @@ export default function Transacoes({ curMonth, curYear }: Props) {
         </div>
       )}
 
-      {/* Modal Confirmar Delete */}
+      {/* Delete */}
       {delId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,.75)', backdropFilter: 'blur(8px)' }}>
           <div className="w-full max-w-xs rounded-2xl p-6" style={{ background: 'var(--card2)', border: '1px solid var(--border)', animation: 'mdIn .2s ease' }}>
             <div className="text-base font-bold mb-2">⚠️ Confirmar exclusão</div>
-            <div className="text-xs mb-5" style={{ color: 'var(--muted)' }}>Tem certeza? Esta ação não pode ser desfeita.</div>
+            <div className="text-xs mb-5" style={{ color: 'var(--muted)' }}>Esta ação não pode ser desfeita.</div>
             <div className="flex gap-2">
-              <button onClick={() => setDelId(null)} style={{ flex: 1, padding: '10px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: '9px', color: 'var(--muted)', fontFamily: 'Sora, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={() => { deleteTransaction(delId); setDelId(null) }} style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg,#ef4444,#dc2626)', border: 'none', borderRadius: '9px', color: '#fff', fontFamily: 'Sora, sans-serif', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Excluir</button>
+              <button onClick={() => setDelId(null)} style={{ flex:1, padding:'10px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:'9px', color:'var(--muted)', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:600, cursor:'pointer' }}>Cancelar</button>
+              <button onClick={() => { deleteTransaction(delId); setDelId(null) }} style={{ flex:1, padding:'10px', background:'linear-gradient(135deg,#ef4444,#dc2626)', border:'none', borderRadius:'9px', color:'#fff', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:700, cursor:'pointer' }}>Excluir</button>
             </div>
           </div>
         </div>
