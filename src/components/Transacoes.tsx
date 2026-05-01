@@ -9,7 +9,7 @@ const CATS = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','La
   'Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Rendimento','Gasto Cartão','Renda Extra','Outros']
 
 export default function Transacoes({ curMonth, curYear }: Props) {
-  const { db, addTransaction, updateTransaction, deleteTransaction, addTransfer } = useDB()
+  const { db, addTransaction, updateTransaction, deleteTransaction, addTransfer, balances } = useDB()
   const [customCats] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('fp_custom_import_cats') || '[]') } catch { return [] }
   })
@@ -51,9 +51,18 @@ export default function Transacoes({ curMonth, curYear }: Props) {
     return txs
   }, [baseTxs, search, typeF, accF])
 
-  // Totais do mes — transferencias nao entram
-  const totalRec  = useMemo(() => monthTxs.filter(t => t.type === 'receita').reduce((s,t) => s+t.val, 0), [monthTxs])
-  const totalDesp = useMemo(() => monthTxs.filter(t => t.type === 'despesa').reduce((s,t) => s+t.val, 0), [monthTxs])
+  // Totais do mes — filtra pela conta selecionada se houver
+  const kpiBase = useMemo(() => {
+    let txs = monthTxs.filter(t => t.type !== 'transferencia')
+    if (accF && accF !== '__card__') txs = txs.filter(t => t.accId === accF)
+    if (accF === '__card__') txs = txs.filter(t => t.cardId)
+    return txs
+  }, [monthTxs, accF])
+  const totalRec  = useMemo(() => kpiBase.filter(t => t.type === 'receita').reduce((s,t) => s+t.val, 0), [kpiBase])
+  const totalDesp = useMemo(() => kpiBase.filter(t => t.type === 'despesa').reduce((s,t) => s+t.val, 0), [kpiBase])
+  // Saldo atual da conta filtrada
+  const selectedAcc = useMemo(() => accF && accF !== '__card__' ? db.accounts.find(a => a.id === accF) : null, [accF, db.accounts])
+  const saldoAcc = selectedAcc ? (balances[selectedAcc.id] ?? 0) : null
 
   function openNew() {
     setEditId(null); setTab('despesa'); setDesc(''); setVal('')
@@ -130,17 +139,31 @@ export default function Transacoes({ curMonth, curYear }: Props) {
   return (
     <div>
       {/* Resumo do mes */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className={`grid gap-3 mb-5 ${saldoAcc !== null ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        {saldoAcc !== null && (
+          <div className="rounded-2xl p-4" style={{ background:'var(--card)', border:'2px solid var(--accent)' }}>
+            <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--accent)' }}>
+              💳 Saldo Atual — {selectedAcc?.name}
+            </div>
+            <div className="font-mono text-base font-extrabold" style={{ color: saldoAcc >= 0 ? 'var(--green)' : 'var(--red)' }}>
+              R$ {fmt(saldoAcc)}
+            </div>
+          </div>
+        )}
         <div className="rounded-2xl p-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>Receitas</div>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>
+            Receitas {accF && accF !== '__card__' && selectedAcc ? `— ${selectedAcc.name}` : ''}
+          </div>
           <div className="font-mono text-base font-extrabold" style={{ color: 'var(--green)' }}>R$ {fmt(totalRec)}</div>
         </div>
         <div className="rounded-2xl p-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>Despesas</div>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>
+            Despesas {accF && accF !== '__card__' && selectedAcc ? `— ${selectedAcc.name}` : ''}
+          </div>
           <div className="font-mono text-base font-extrabold" style={{ color: 'var(--red)' }}>R$ {fmt(totalDesp)}</div>
         </div>
         <div className="rounded-2xl p-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>Balanço</div>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>Balanço do Mês</div>
           <div className="font-mono text-base font-extrabold" style={{ color: totalRec - totalDesp >= 0 ? 'var(--green)' : 'var(--red)' }}>
             R$ {fmt(totalRec - totalDesp)}
           </div>
