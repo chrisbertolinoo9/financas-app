@@ -55,3 +55,12 @@ export function txBelongsToInvoice(t: Transaction, card: Card, month: number, ye
 export function genId(): string {
   return 'id' + Date.now() + Math.random().toString(36).slice(2, 7)
 }
+
+// Retorna true se a transação ocorreu ATÉ (inclusive) o fim do mês/ano
+export function upToMonth(dateISO: string, month: number, year: number): boolean {
+  if (!dateISO) return false
+  const d = new Date(dateISO + 'T12:00:00')
+  if (d.getFullYear() < year) return true
+  if (d.getFullYear() === year && d.getMonth() <= month) return true
+  return false
+}
