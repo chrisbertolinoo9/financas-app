@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useDB } from '../contexts/DBContext'
 import { fmt, txBelongsToInvoice, isoToDisplay, C_COLOR, C_ICON, genId, todayISO } from '../lib/utils'
 import type { Card, Transaction } from '../types'
+import ImportModal from './ImportModal'
 
 interface Props { curMonth: number; curYear: number }
 
@@ -28,6 +29,10 @@ export default function Cartoes({ curMonth, curYear }: Props) {
   const [txDate, setTxDate] = useState(todayISO())
   const [txCat, setTxCat] = useState('Outros')
   const [delTxId, setDelTxId] = useState<string|null>(null)
+  const [importCardId, setImportCardId] = useState<string|null>(null)
+  const [importMonth, setImportMonth] = useState(curMonth)
+  const [importYear, setImportYear] = useState(curYear)
+  const [showImportPicker, setShowImportPicker] = useState(false)
 
   function cardSpend(cardId: string) {
     const card = db.cards.find(c => c.id === cardId)
@@ -190,10 +195,17 @@ export default function Cartoes({ curMonth, curYear }: Props) {
             </div>
             <div className="flex items-center justify-between mb-3">
               <div className="text-xs font-bold" style={{color:'var(--muted)'}}>Lançamentos da fatura</div>
-              <button onClick={()=>setTxModal(true)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white"
-                style={{background:'linear-gradient(135deg,var(--accent),var(--accent2))',border:'none',cursor:'pointer',fontFamily:'Sora,sans-serif'}}>
-                + Lançamento
-              </button>
+              <div className="flex gap-2">
+                <button onClick={()=>{setImportCardId(invoiceCard.id);setImportMonth(curMonth);setImportYear(curYear);setShowImportPicker(true)}}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                  style={{background:'linear-gradient(135deg,rgba(99,102,241,.18),rgba(6,182,212,.18))',border:'1px solid rgba(99,102,241,.4)',color:'var(--accent)',cursor:'pointer',fontFamily:'Sora,sans-serif'}}>
+                  📥 Importar
+                </button>
+                <button onClick={()=>setTxModal(true)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white"
+                  style={{background:'linear-gradient(135deg,var(--accent),var(--accent2))',border:'none',cursor:'pointer',fontFamily:'Sora,sans-serif'}}>
+                  + Lançamento
+                </button>
+              </div>
             </div>
             <div className="flex flex-col gap-0.5">
               {invTxs.length ? invTxs.map(t=>(
@@ -217,6 +229,56 @@ export default function Cartoes({ curMonth, curYear }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Picker mes/ano para importar fatura */}
+      {showImportPicker && importCardId && (() => {
+        const card = db.cards.find(c => c.id === importCardId)
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{background:'rgba(0,0,0,.8)',backdropFilter:'blur(8px)'}}
+            onClick={e=>{if(e.target===e.currentTarget)setShowImportPicker(false)}}>
+            <div className="w-full max-w-xs rounded-2xl p-6" style={{background:'var(--card2)',border:'1px solid var(--border)',animation:'mdIn .2s ease'}}>
+              <div className="text-base font-bold mb-1">📥 Importar Fatura</div>
+              <div className="text-xs mb-4" style={{color:'var(--muted)'}}>
+                Cartão: <span style={{color:'var(--accent)',fontWeight:700}}>{card?.name}</span>
+              </div>
+              <div className="mb-4">
+                <label className="text-xs font-bold uppercase tracking-wide block mb-2" style={{color:'var(--muted)'}}>📅 Mês de referência</label>
+                <div className="flex gap-2">
+                  <select value={importMonth} onChange={e=>setImportMonth(Number(e.target.value))}
+                    style={{flex:1,background:'var(--bg3)',border:'1.5px solid var(--border)',borderRadius:9,padding:'10px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                    {MONTHS.map((m,i)=><option key={i} value={i}>{m}</option>)}
+                  </select>
+                  <select value={importYear} onChange={e=>setImportYear(Number(e.target.value))}
+                    style={{width:90,background:'var(--bg3)',border:'1.5px solid var(--border)',borderRadius:9,padding:'10px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                    {[curYear-2,curYear-1,curYear,curYear+1].map(y=><option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={()=>setShowImportPicker(false)}
+                  style={{flex:1,padding:'11px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>
+                  Cancelar
+                </button>
+                <button onClick={()=>{ setShowImportPicker(false); setInvoiceCard(null) }}
+                  style={{flex:2,padding:'11px',background:'linear-gradient(135deg,var(--accent),var(--accent2))',border:'none',borderRadius:'9px',color:'#fff',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>
+                  📥 Abrir Importação
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ImportModal para cartao */}
+      {!showImportPicker && importCardId && (
+        <ImportModal
+          onClose={()=>setImportCardId(null)}
+          curMonth={importMonth}
+          curYear={importYear}
+          presetCardId={importCardId}
+        />
       )}
 
       {/* Modal novo lançamento na fatura */}
