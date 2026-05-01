@@ -9,7 +9,7 @@ interface Props { curMonth: number; curYear: number }
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const BRANDS = ['Visa','Mastercard','Elo','Amex','Hipercard','Outro']
 const CARD_COLORS = ['#8b5cf6','#6366f1','#3b82f6','#06b6d4','#22c55e','#f59e0b','#ef4444']
-const CATS = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','Lazer','Airsoft','Viagem','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Gasto Cartão','Renda Extra','Outros']
+const CATS = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','Lazer','Airsoft','Viagem','PC','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Gasto Cartão','Renda Extra','Outros']
 
 export default function Cartoes({ curMonth, curYear }: Props) {
   const { db, addCard, updateCard, deleteCard, addTransaction, updateTransaction, deleteTransaction } = useDB()
@@ -32,10 +32,21 @@ export default function Cartoes({ curMonth, curYear }: Props) {
   const [editTxId, setEditTxId] = useState<string|null>(null)
   const [editCat, setEditCat] = useState('')
   const [editName, setEditName] = useState('')
-  const [customCats] = useState<string[]>(() => {
+  const [customCats, setCustomCats] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('fp_custom_import_cats') || '[]') } catch { return [] }
   })
   const allCats = [...CATS, ...customCats.filter(c => !CATS.includes(c))]
+  const [newCatMode, setNewCatMode] = useState(false)
+  const [newCatVal, setNewCatVal] = useState('')
+
+  function addCustomCat(name: string) {
+    if (!name.trim() || allCats.includes(name.trim())) return name.trim()
+    const nc = name.trim()
+    const updated = [...customCats, nc]
+    setCustomCats(updated)
+    localStorage.setItem('fp_custom_import_cats', JSON.stringify(updated))
+    return nc
+  }
   const [importCardId, setImportCardId] = useState<string|null>(null)
   const [importMonth, setImportMonth] = useState(curMonth)
   const [importYear, setImportYear] = useState(curYear)
@@ -223,10 +234,24 @@ export default function Cartoes({ curMonth, curYear }: Props) {
                       <div className="flex gap-2">
                         <input value={editName} onChange={e=>setEditName(e.target.value)}
                           style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'5px 8px',fontFamily:'Sora,sans-serif',fontSize:11,color:'var(--text)',outline:'none'}} />
-                        <select value={editCat} onChange={e=>setEditCat(e.target.value)}
-                          style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'5px 8px',fontFamily:'Sora,sans-serif',fontSize:11,color:'var(--text)',outline:'none',cursor:'pointer'}}>
-                          {allCats.map(c=><option key={c}>{c}</option>)}
-                        </select>
+                        {newCatMode ? (
+                          <input autoFocus value={newCatVal} onChange={e=>setNewCatVal(e.target.value)}
+                            onKeyDown={e=>{
+                              if(e.key==='Enter'){const nc=addCustomCat(newCatVal);setEditCat(nc);setNewCatMode(false);setNewCatVal('')}
+                              if(e.key==='Escape'){setNewCatMode(false);setNewCatVal('')}
+                            }}
+                            placeholder="Nova categoria... (Enter)"
+                            style={{flex:1,background:'var(--bg)',border:'1px solid var(--accent)',borderRadius:7,padding:'5px 8px',fontFamily:'Sora,sans-serif',fontSize:11,color:'var(--text)',outline:'none'}} />
+                        ) : (
+                          <select value={editCat} onChange={e=>{
+                            if(e.target.value==='__new__'){setNewCatMode(true);setNewCatVal('')}
+                            else setEditCat(e.target.value)
+                          }}
+                            style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'5px 8px',fontFamily:'Sora,sans-serif',fontSize:11,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                            {allCats.map(c=><option key={c}>{c}</option>)}
+                            <option value="__new__">＋ Nova categoria</option>
+                          </select>
+                        )}
                       </div>
                       <div className="flex gap-1.5 justify-end">
                         <button onClick={()=>setEditTxId(null)}
