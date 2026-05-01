@@ -94,6 +94,11 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
   const [imported, setImported] = useState(0)
   const [refMonth, setRefMonth] = useState(curMonth)
   const [refYear, setRefYear]   = useState(curYear)
+  const [customCats, setCustomCats] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('fp_custom_import_cats') || '[]') } catch { return [] }
+  })
+  const [newCatRow, setNewCatRow] = useState<number|null>(null)
+  const [newCatVal, setNewCatVal] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -509,9 +514,32 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
                   <input value={r.name} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,name:e.target.value}:x))} style={{...inputStyle,padding:'4px 6px',fontSize:11}} />
                   {r.type === 'transferencia' ? (
                     <div style={{fontSize:10,color:'var(--muted)',fontWeight:700,textAlign:'center'}}>⇄ Transf.</div>
+                  ) : newCatRow === i ? (
+                    <div className="flex gap-1">
+                      <input autoFocus value={newCatVal} onChange={e=>setNewCatVal(e.target.value)}
+                        onKeyDown={e=>{
+                          if(e.key==='Enter' && newCatVal.trim()) {
+                            const nc = newCatVal.trim()
+                            const updatedCats = [...customCats, nc]
+                            setCustomCats(updatedCats)
+                            localStorage.setItem('fp_custom_import_cats', JSON.stringify(updatedCats))
+                            setPending(p=>p.map((x,j)=>j===i?{...x,cat:nc}:x))
+                            setNewCatRow(null); setNewCatVal('')
+                          }
+                          if(e.key==='Escape'){setNewCatRow(null);setNewCatVal('')}
+                        }}
+                        placeholder="Nova cat..."
+                        style={{...inputStyle,padding:'3px 4px',fontSize:10,flex:1}} />
+                    </div>
                   ) : (
-                    <select value={r.cat} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,cat:e.target.value}:x))} style={{...inputStyle,padding:'3px 4px',fontSize:10}}>
-                      {CATS.map(c=><option key={c}>{c}</option>)}
+                    <select value={r.cat}
+                      onChange={e=>{
+                        if(e.target.value==='__new__'){setNewCatRow(i);setNewCatVal('')}
+                        else setPending(p=>p.map((x,j)=>j===i?{...x,cat:e.target.value}:x))
+                      }}
+                      style={{...inputStyle,padding:'3px 4px',fontSize:10}}>
+                      {[...CATS,...customCats].map(c=><option key={c}>{c}</option>)}
+                      <option value="__new__">＋ Nova categoria</option>
                     </select>
                   )}
                   <select value={r.type} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,type:e.target.value as 'receita'|'despesa'|'transferencia'}:x))}
