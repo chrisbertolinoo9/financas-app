@@ -70,7 +70,7 @@ interface Props {
 }
 
 export default function ImportModal({ onClose, curMonth, curYear, presetAccId }: Props) {
-  const { db, addTransaction, addTransfer } = useDB()
+  const { db, save } = useDB()
   const [step, setStep] = useState(1)
   const [files, setFiles] = useState<{file: File; dataUrl: string; type: 'image'|'pdf'; name: string}[]>([])
   const [destType, setDestType] = useState<'none'|'card'|'acc'>(presetAccId ? 'acc' : 'none')
@@ -166,34 +166,33 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
     const finalCardId = destType==='card' ? destId : null
     const finalAccId  = destType==='acc'  ? destId : null
 
-    toImp.forEach(r => {
+    // Monta todas as transacoes de uma vez e salva em batch — evita problema de closure
+    const newTxs: Transaction[] = toImp.map(r => {
       if (r.type === 'transferencia') {
-        // Transferencias importadas: registra como transferencia sem conta destino definida
-        // O usuario pode depois vincular manualmente
-        const t: Transaction = {
+        return {
           id: genId(), name: r.name, cat: 'Transferência',
-          type: 'transferencia', val: r.val,
+          type: 'transferencia' as const, val: r.val,
           dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
           icon: '⇄', color: '#6b7591',
           accId: finalAccId, cardId: null, toAccId: null,
           invoiceMonth: null, invoiceYear: null,
         }
-        addTransaction(t)
-      } else {
-        const t: Transaction = {
-          id: genId(), name: r.name, cat: r.cat, type: r.type, val: r.val,
-          dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
-          icon: r.icon || C_ICON[r.cat] || '💰',
-          color: C_COLOR[r.cat] || '#6b7591',
-          accId: finalCardId ? null : finalAccId,
-          cardId: finalCardId,
-          toAccId: null,
-          invoiceMonth: finalCardId ? refMonth : null,
-          invoiceYear:  finalCardId ? refYear  : null,
-        }
-        addTransaction(t)
+      }
+      return {
+        id: genId(), name: r.name, cat: r.cat, type: r.type as 'receita'|'despesa', val: r.val,
+        dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
+        icon: r.icon || C_ICON[r.cat] || '💰',
+        color: C_COLOR[r.cat] || '#6b7591',
+        accId: finalCardId ? null : finalAccId,
+        cardId: finalCardId,
+        toAccId: null,
+        invoiceMonth: finalCardId ? refMonth : null,
+        invoiceYear:  finalCardId ? refYear  : null,
       }
     })
+
+    // Salva tudo de uma vez no DB
+    save({ ...db, transactions: [...newTxs, ...db.transactions] })
     setImported(toImp.length); setStep(4)
   }
 
