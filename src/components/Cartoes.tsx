@@ -620,7 +620,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
           </div>
         </div>
       )}
-    </div>
+
 
       {/* ── Modal RecargaPay ── */}
       {showRecargaPay && (
@@ -795,5 +795,6 @@ export default function Cartoes({ curMonth, curYear }: Props) {
         </div>
       )}
 
+    </div>
   )
 }
