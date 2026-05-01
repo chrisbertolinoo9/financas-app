@@ -56,7 +56,9 @@ export default function Cartoes({ curMonth, curYear }: Props) {
   function cardSpend(cardId: string) {
     const card = db.cards.find(c => c.id === cardId)
     if (!card) return 0
-    return db.transactions.filter(t => t.cardId === cardId && txBelongsToInvoice(t, card, curMonth, curYear) && t.type === 'despesa').reduce((s,t) => s+t.val, 0)
+    return db.transactions
+      .filter(t => t.cardId === cardId && txBelongsToInvoice(t, card, curMonth, curYear))
+      .reduce((s, t) => t.type === 'receita' ? s - t.val : s + t.val, 0)
   }
 
   const totalFaturas = useMemo(() => db.cards.reduce((s,c) => s+cardSpend(c.id), 0), [db.cards, db.transactions, curMonth, curYear])
