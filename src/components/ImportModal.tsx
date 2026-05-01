@@ -25,6 +25,7 @@ RECEITAS (type="receita"):
 - "CAIXA ECONOMICA FEDERAL" entrada → receita, cat="Renda Extra", icon="💰" (FGTS aniversário)
 - "Crédito" ou "Saldo" em extrato da Swile/VR/Vale → receita, cat="Benefício", icon="🎁"
 - Qualquer crédito de benefício alimentação/refeição → receita, cat="Benefício", icon="🎁"
+- "Lucro" ou "Lucros" (rendimento de conta 99/99Pay/investimento) → AGRUPAR todos em UM ÚNICO lançamento: name="Rendimento 99 - [Mês]", val=SOMA de todos os lucros do extrato, type="receita", cat="Rendimento", icon="📈", date=último dia do mês. NÃO criar um lançamento por dia.
 - Pix recebido do Santander com nome CHRISTIAN BERTOLINO → receita, cat="Salário", icon="💼"
 - "CLAUDETE" ou nome de familiar → receita, cat="Renda Extra", icon="💰"
 - Rendimentos, cashback, estorno → receita, cat="Renda Extra"
