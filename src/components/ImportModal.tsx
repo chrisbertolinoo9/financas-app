@@ -37,6 +37,8 @@ export default function ImportModal({ onClose, curMonth, curYear }: Props) {
   const [aiSub, setAiSub] = useState('Identificando transações')
   const [prog, setProg] = useState(0)
   const [imported, setImported] = useState(0)
+  const [refMonth, setRefMonth] = useState(curMonth)
+  const [refYear, setRefYear]   = useState(curYear)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -97,8 +99,8 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
       if (data.error) throw new Error(data.error.message)
       const raw = data.content.map((b: {text?:string}) => b.text||'').join('').replace(/```json|```/g,'').trim()
       const extracted = JSON.parse(raw)
-      const year = curYear
-      const month = (curMonth+1).toString().padStart(2,'0')
+      const year = refYear
+      const month = (refMonth+1).toString().padStart(2,'0')
       const rows: PendingRow[] = (extracted.transactions||[]).map((t: {name:string;val:number;type:'receita'|'despesa';cat:string;icon:string;date:string}, i: number) => {
         const parts = (t.date||'').split('/')
         const dateISO = parts.length===2 ? `${year}-${month}-${parts[0].padStart(2,'0')}` : `${year}-${month}-01`
@@ -126,8 +128,8 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
         icon:r.icon||C_ICON[r.cat]||'💰', color:C_COLOR[r.cat]||'#6b7591',
         accId: finalCardId ? null : finalAccId,
         cardId: finalCardId,
-        invoiceMonth: finalCardId ? curMonth : null,
-        invoiceYear:  finalCardId ? curYear  : null,
+        invoiceMonth: finalCardId ? refMonth : null,
+        invoiceYear:  finalCardId ? refYear  : null,
       }
       addTransaction(t)
     })
@@ -176,6 +178,24 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
         {/* STEP 1 — Upload */}
         {step===1 && (
           <div>
+            {/* Mês de referência */}
+            <div className="rounded-xl p-3.5 mb-3" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
+              <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{color:'var(--muted)'}}>📅 Mês de referência dos lançamentos</div>
+              <div className="flex gap-2">
+                <select value={refMonth} onChange={e=>setRefMonth(Number(e.target.value))}
+                  style={{flex:1,background:'var(--bg)',border:'1.5px solid var(--border)',borderRadius:8,padding:'9px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                  {MONTHS.map((m,i)=><option key={i} value={i}>{m}</option>)}
+                </select>
+                <select value={refYear} onChange={e=>setRefYear(Number(e.target.value))}
+                  style={{width:100,background:'var(--bg)',border:'1.5px solid var(--border)',borderRadius:8,padding:'9px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                  {[curYear-2,curYear-1,curYear,curYear+1].map(y=><option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <div className="text-xs mt-2" style={{color:'var(--muted)'}}>
+                Transações importadas serão datadas em <span style={{color:'var(--accent)',fontWeight:700}}>{MONTHS[refMonth]} {refYear}</span>
+              </div>
+            </div>
+
             {/* Dropzone */}
             <div className="relative rounded-xl p-8 text-center mb-3 transition-all"
               style={{border:'2px dashed var(--border)',cursor:'pointer'}}
