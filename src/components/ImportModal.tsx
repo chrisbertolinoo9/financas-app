@@ -146,7 +146,7 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
       const extracted = JSON.parse(raw)
       const year = refYear
       const month = (refMonth+1).toString().padStart(2,'0')
-      const rows: PendingRow[] = (extracted.transactions||[]).map((t: {name:string;val:number;type:'receita'|'despesa'|'transferencia';cat:string;icon:string;date:string}, i: number) => {
+      const rows: PendingRow[] = (extracted.transactions||[]).map((t: {name:string;val:number;type:'receita'|'despesa'|'transferencia';dir?:'in'|'out';cat:string;icon:string;date:string}, i: number) => {
         const parts = (t.date||'').split('/')
         const dateISO = parts.length===2 ? `${year}-${month}-${parts[0].padStart(2,'0')}` : `${year}-${month}-01`
         const dup = isDup(t.name, t.val)
