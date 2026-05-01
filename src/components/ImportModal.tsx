@@ -72,7 +72,7 @@ interface Props {
 }
 
 export default function ImportModal({ onClose, curMonth, curYear, presetAccId }: Props) {
-  const { db, save } = useDB()
+  const { db, save, balances } = useDB()
   const [step, setStep] = useState(1)
   const [files, setFiles] = useState<{file: File; dataUrl: string; type: 'image'|'pdf'; name: string}[]>([])
   const [destType, setDestType] = useState<'none'|'card'|'acc'>(presetAccId ? 'acc' : 'none')
@@ -451,6 +451,48 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
                 </div>
               ))}
             </div>
+
+            {/* Preview saldo pos-importacao */}
+            {destType === 'acc' && destId && (() => {
+              const acc = db.accounts.find(a => a.id === destId)
+              if (!acc) return null
+              const saldoAtual = balances[destId] ?? 0
+              const entradas = pending.filter(r => r._sel && r.type === 'receita').reduce((s,r) => s+r.val, 0)
+              const saidas   = pending.filter(r => r._sel && r.type === 'despesa').reduce((s,r) => s+r.val, 0)
+              const saldoFinal = saldoAtual + entradas - saidas
+              return (
+                <div className="rounded-xl p-4 mb-4" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
+                  <div className="text-xs font-bold uppercase tracking-wide mb-3" style={{color:'var(--muted)'}}>
+                    📊 Preview saldo — {acc.name}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span style={{color:'var(--muted)'}}>Saldo atual</span>
+                      <span className="font-mono font-bold" style={{color:'var(--blue)'}}>R$ {saldoAtual.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+                    </div>
+                    {entradas > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span style={{color:'var(--muted)'}}>+ Receitas a importar</span>
+                        <span className="font-mono font-bold" style={{color:'var(--green)'}}>+ R$ {entradas.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+                      </div>
+                    )}
+                    {saidas > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span style={{color:'var(--muted)'}}>- Despesas a importar</span>
+                        <span className="font-mono font-bold" style={{color:'var(--red)'}}>- R$ {saidas.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+                      </div>
+                    )}
+                    <div className="h-px mt-1" style={{background:'var(--border)'}} />
+                    <div className="flex justify-between">
+                      <span className="text-xs font-bold">Saldo após importação</span>
+                      <span className="font-mono font-extrabold text-sm" style={{color: saldoFinal >= 0 ? 'var(--green)' : 'var(--red)'}}>
+                        R$ {saldoFinal.toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
 
             <div className="flex gap-2 justify-end">
               <button onClick={()=>setStep(1)} style={{padding:'10px 20px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>← Voltar</button>
