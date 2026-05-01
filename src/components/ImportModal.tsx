@@ -23,14 +23,18 @@ interface Props {
   onClose: () => void
   curMonth: number
   curYear: number
+  presetAccId?: string | null
 }
 
-export default function ImportModal({ onClose, curMonth, curYear }: Props) {
+export default function ImportModal({ onClose, curMonth, curYear, presetAccId }: Props) {
   const { db, addTransaction } = useDB()
   const [step, setStep] = useState(1)
   const [files, setFiles] = useState<{file: File; dataUrl: string; type: 'image'|'pdf'; name: string}[]>([])
-  const [destType, setDestType] = useState<'none'|'card'|'acc'>('none')
-  const [destId, setDestId] = useState('')
+
+  // Se veio presetAccId, pre-seleciona a conta
+  const [destType, setDestType] = useState<'none'|'card'|'acc'>(presetAccId ? 'acc' : 'none')
+  const [destId, setDestId] = useState(presetAccId || '')
+
   const [pending, setPending] = useState<PendingRow[]>([])
   const [loading, setLoading] = useState(false)
   const [aiMsg, setAiMsg] = useState('Processando...')
@@ -42,6 +46,8 @@ export default function ImportModal({ onClose, curMonth, curYear }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+
+  const presetAcc = presetAccId ? db.accounts.find(a => a.id === presetAccId) : null
 
   function isDup(name: string, val: number) {
     return db.transactions.some(t => t.name.toLowerCase() === name.toLowerCase() && Math.abs(t.val - val) < 0.02)
@@ -88,9 +94,7 @@ export default function ImportModal({ onClose, curMonth, curYear }: Props) {
           content.push({ type:'image', source:{ type:'base64', media_type: f.file.type||'image/jpeg', data: f.dataUrl.split(',')[1] } })
         }
       }
-      content.push({ type:'text', text: `Analise ${files.length>1?'estes arquivos':'este arquivo'} de extrato/fatura bancária${hasPdf?' (PDF)':' (imagem)'}. Retorne APENAS JSON válido sem markdown:
-{"transactions":[{"name":"descrição","val":0.00,"type":"despesa ou receita","cat":"Alimentação|Moradia|Transporte|Saúde|Lazer|Salário|Freelance|Assinatura|Educação|Vestuário|Combustível|Outros","date":"DD/MM","icon":"emoji"}]}
-Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores numéricos puros sem R$. Se não houver transações retorne transactions:[].` })
+      content.push({ type:'text', text: `Analise ${files.length>1?'estes arquivos':'este arquivo'} de extrato/fatura bancária${hasPdf?' (PDF)':' (imagem)'}. Retorne APENAS JSON válido sem markdown:\n{\"transactions\":[{\"name\":\"descrição\",\"val\":0.00,\"type\":\"despesa ou receita\",\"cat\":\"Alimentação|Moradia|Transporte|Saúde|Lazer|Salário|Freelance|Assinatura|Educação|Vestuário|Combustível|Outros\",\"date\":\"DD/MM\",\"icon\":\"emoji\"}]}\nRegras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores numéricos puros sem R$. Se não houver transações retorne transactions:[].` })
       const headers: Record<string,string> = { 'Content-Type':'application/json' }
       if (hasPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25'
       const resp = await fetch(PROXY, { method:'POST', headers, body: JSON.stringify({ model:'claude-opus-4-5', max_tokens:4000, messages:[{ role:'user', content }] }) })
@@ -128,6 +132,7 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
         icon:r.icon||C_ICON[r.cat]||'💰', color:C_COLOR[r.cat]||'#6b7591',
         accId: finalCardId ? null : finalAccId,
         cardId: finalCardId,
+        toAccId: null,
         invoiceMonth: finalCardId ? refMonth : null,
         invoiceYear:  finalCardId ? refYear  : null,
       }
@@ -157,7 +162,11 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
         <div className="flex items-start justify-between mb-2">
           <div>
             <div className="text-base font-bold">📄 Importar Extrato / Fatura</div>
-            <div className="text-xs mt-0.5" style={{color:'var(--muted)'}}>Print, imagem ou PDF — a IA extrai e você revisa</div>
+            <div className="text-xs mt-0.5" style={{color:'var(--muted)'}}>
+              {presetAcc
+                ? 'Conta: ' + presetAcc.name + ' · ' + MONTHS[refMonth] + ' ' + refYear
+                : 'Print, imagem ou PDF — a IA extrai e você revisa'}
+            </div>
           </div>
           <button onClick={onClose} style={{background:'none',border:'none',color:'var(--muted)',fontSize:18,cursor:'pointer',padding:'2px 6px'}}>✕</button>
         </div>
@@ -178,7 +187,7 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
         {/* STEP 1 — Upload */}
         {step===1 && (
           <div>
-            {/* Mês de referência */}
+            {/* Mes de referencia */}
             <div className="rounded-xl p-3.5 mb-3" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
               <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{color:'var(--muted)'}}>📅 Mês de referência dos lançamentos</div>
               <div className="flex gap-2">
@@ -208,7 +217,6 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
               <div className="text-xs" style={{color:'var(--muted)'}}>PNG, JPG, WEBP, PDF — múltiplos arquivos</div>
             </div>
 
-            {/* Thumbs */}
             {files.length>0 && (
               <div className="flex gap-2 flex-wrap mb-3">
                 {files.map((f,i) => (
@@ -226,20 +234,30 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
               </div>
             )}
 
-            {/* Destino */}
+            {/* Destino — se veio presetAccId mostra badge fixo, senao mostra seletor */}
             <div className="rounded-xl p-3.5 mb-4" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
               <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{color:'var(--muted)'}}>📌 Vincular ao</div>
-              <div className="flex gap-2 flex-wrap">
-                {[{type:'none' as const,id:'',label:'📋 Sem vínculo'},...db.cards.map(c=>({type:'card' as const,id:c.id,label:'💳 '+c.name})),...db.accounts.filter(a=>!a.archived).map(a=>({type:'acc' as const,id:a.id,label:'🏦 '+a.name}))].map(opt=>{
-                  const active = destType===opt.type && destId===opt.id
-                  return (
-                    <button key={opt.type+opt.id} onClick={()=>{setDestType(opt.type);setDestId(opt.id)}}
-                      style={{padding:'6px 12px',borderRadius:8,border:'1.5px solid '+(active?'var(--accent)':'var(--border)'),background:active?'var(--glow)':'var(--bg)',color:active?'var(--accent)':'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:11,fontWeight:600,cursor:'pointer'}}>
-                      {opt.label}
-                    </button>
-                  )
-                })}
-              </div>
+              {presetAcc ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{background:'var(--glow)',border:'1.5px solid var(--accent)'}}>
+                    <span style={{fontSize:14}}>🏦</span>
+                    <span className="text-xs font-bold" style={{color:'var(--accent)'}}>{presetAcc.name}</span>
+                    <span className="text-xs" style={{color:'var(--muted)'}}>· pré-selecionado</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 flex-wrap">
+                  {[{type:'none' as const,id:'',label:'📋 Sem vínculo'},...db.cards.map(c=>({type:'card' as const,id:c.id,label:'💳 '+c.name})),...db.accounts.filter(a=>!a.archived).map(a=>({type:'acc' as const,id:a.id,label:'🏦 '+a.name}))].map(opt=>{
+                    const isActive = destType===opt.type && destId===opt.id
+                    return (
+                      <button key={opt.type+opt.id} onClick={()=>{setDestType(opt.type);setDestId(opt.id)}}
+                        style={{padding:'6px 12px',borderRadius:8,border:'1.5px solid '+(isActive?'var(--accent)':'var(--border)'),background:isActive?'var(--glow)':'var(--bg)',color:isActive?'var(--accent)':'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:11,fontWeight:600,cursor:'pointer'}}>
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 justify-end">
@@ -258,7 +276,7 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
             <div className="rounded-xl p-5" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
               <div className="flex items-center gap-2 mb-3">
                 <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'linear-gradient(135deg,rgba(99,102,241,.18),rgba(6,182,212,.18))',border:'1px solid rgba(99,102,241,.28)',borderRadius:20,padding:'3px 10px',fontSize:9,fontWeight:700,color:'var(--cyan)'}}>
-                  {[0,1,2].map(i=><span key={i} style={{width:6,height:6,borderRadius:'50%',background:'var(--accent)',animation:`bp 1.2s ease infinite`,animationDelay:`${i*.2}s`,display:'inline-block'}} />)}
+                  {[0,1,2].map(i=><span key={i} style={{width:6,height:6,borderRadius:'50%',background:'var(--accent)',animationDelay:`${i*.2}s`,display:'inline-block'}} />)}
                   &nbsp;IA Analisando
                 </span>
               </div>
@@ -272,10 +290,9 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
           </div>
         )}
 
-        {/* STEP 3 — Revisão */}
+        {/* STEP 3 — Revisao */}
         {step===3 && (
           <div>
-            {/* Resumo */}
             <div className="flex gap-3 p-3 rounded-xl mb-4" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
               {[
                 {label:'Encontradas',value:pending.length,color:'var(--cyan)'},
@@ -290,7 +307,6 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
               ))}
             </div>
 
-            {/* Controles */}
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs" style={{color:'var(--muted)'}}>✏️ Clique para editar</div>
               <div className="flex gap-1">
@@ -299,14 +315,9 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
               </div>
             </div>
 
-            {/* Tabela */}
             <div className="rounded-xl overflow-hidden mb-4" style={{border:'1px solid var(--border)',maxHeight:320,overflowY:'auto'}}>
               <div className="grid gap-1 px-3 py-2 text-xs font-bold uppercase tracking-wide" style={{gridTemplateColumns:'24px 1fr 100px 60px 70px',color:'var(--muted)',borderBottom:'1px solid var(--border)',background:'var(--bg3)'}}>
-                <div/>
-                <div>Descrição</div>
-                <div>Categoria</div>
-                <div>Data</div>
-                <div>Valor</div>
+                <div/><div>Descrição</div><div>Categoria</div><div>Data</div><div>Valor</div>
               </div>
               {pending.map((r,i) => (
                 <div key={r._id} className="grid gap-1 px-3 py-2 items-center transition-colors"
@@ -343,7 +354,7 @@ Regras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores nu
             <div className="text-lg font-extrabold mb-2">{imported} transaç{imported!==1?'ões':'ão'} importada{imported!==1?'s':''}!</div>
             <div className="text-xs mb-6" style={{color:'var(--muted)'}}>Os dados foram salvos e sincronizados na nuvem.</div>
             <div className="flex gap-3 justify-center">
-              <button onClick={()=>{setStep(1);setFiles([]);setPending([]);setDestType('none');setDestId('')}} style={{padding:'10px 20px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>
+              <button onClick={()=>{setStep(1);setFiles([]);setPending([])}} style={{padding:'10px 20px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>
                 📷 Importar mais
               </button>
               <button onClick={onClose} style={{padding:'10px 20px',background:'linear-gradient(135deg,var(--accent),var(--accent2))',border:'none',borderRadius:'9px',color:'#fff',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>
