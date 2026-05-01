@@ -22,22 +22,23 @@ function KpiCard({ icon, label, value, sub, color, onClick }: {
 }
 
 function TxRow({ t }: { t: Transaction }) {
+  const isTransfer = t.type === 'transferencia'
   return (
     <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors group"
       style={{ cursor: 'pointer' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg3)'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
       <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-        style={{ background: (C_COLOR[t.cat] || '#6b7591') + '22' }}>
-        {t.icon || C_ICON[t.cat] || '💰'}
+        style={{ background: isTransfer ? '#6b759122' : (C_COLOR[t.cat] || '#6b7591') + '22' }}>
+        {isTransfer ? '⇄' : (t.icon || C_ICON[t.cat] || '💰')}
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-xs font-semibold truncate">{t.name}</div>
-        <div className="text-xs" style={{ color: 'var(--muted)' }}>{t.cat}</div>
+        <div className="text-xs" style={{ color: 'var(--muted)' }}>{isTransfer ? 'Transferência' : t.cat}</div>
       </div>
       <div className="text-right flex-shrink-0">
-        <div className="font-mono text-xs font-bold" style={{ color: t.type === 'receita' ? 'var(--green)' : 'var(--red)' }}>
-          {t.type === 'receita' ? '+' : '-'} R$ {fmt(t.val)}
+        <div className="font-mono text-xs font-bold" style={{ color: isTransfer ? 'var(--muted)' : t.type === 'receita' ? 'var(--green)' : 'var(--red)' }}>
+          {isTransfer ? '⇄' : t.type === 'receita' ? '+' : '-'} R$ {fmt(t.val)}
         </div>
         <div className="text-xs" style={{ color: 'var(--muted)' }}>{isoToDisplay(t.dateISO)}</div>
       </div>
@@ -53,9 +54,10 @@ export default function Dashboard({ curMonth, curYear }: Props) {
     [db.transactions, curMonth, curYear]
   )
 
+  // Transferencias nao entram nos KPIs de receita/despesa
   const rec  = useMemo(() => txs.filter(t => t.type === 'receita').reduce((s, t) => s + t.val, 0), [txs])
   const desp = useMemo(() => txs.filter(t => t.type === 'despesa').reduce((s, t) => s + t.val, 0), [txs])
-  const saldo = useMemo(() => db.accounts.reduce((s, a) => s + a.balance, 0), [db.accounts])
+  const saldo = useMemo(() => db.accounts.filter(a => !a.archived).reduce((s, a) => s + a.balance, 0), [db.accounts])
   const cartTot = useMemo(() =>
     db.cards.reduce((s, c) =>
       s + db.transactions.filter(t => t.cardId === c.id && txBelongsToInvoice(t, c, curMonth, curYear) && t.type === 'despesa').reduce((x, t) => x + t.val, 0), 0),
@@ -83,14 +85,13 @@ export default function Dashboard({ curMonth, curYear }: Props) {
   const totalDesp = catTotals.reduce((s, e) => s + e[1], 0) || 1
   const COLORS = ['#ef4444','#3b82f6','#f59e0b','#8b5cf6','#06b6d4','#22c55e']
 
-  // Donut SVG
   const r = 38, circ = 2 * Math.PI * r
   let offset = 0
   const arcs = catTotals.slice(0, 6).map((e, i) => {
     const pct = e[1] / totalDesp
     const dash = pct * circ
     const arc = <circle key={i} cx="55" cy="55" r={r} fill="none" stroke={COLORS[i]}
-      strokeWidth="14" strokeDasharray={`${dash} ${circ}`}
+      strokeWidth="14" strokeDasharray={}
       strokeDashoffset={-offset} transform="rotate(-90 55 55)" />
     offset += dash
     return arc
@@ -98,10 +99,9 @@ export default function Dashboard({ curMonth, curYear }: Props) {
 
   return (
     <div>
-      {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <KpiCard icon="🏦" label="Saldo Atual" value={"R$ " + fmt(saldo)}
-          sub={db.accounts.length + " conta" + (db.accounts.length !== 1 ? "s" : "")}
+          sub={db.accounts.filter(a => !a.archived).length + " conta" + (db.accounts.filter(a => !a.archived).length !== 1 ? "s" : "")}
           color="var(--blue)" />
         <KpiCard icon="↑" label="Receitas" value={"R$ " + fmt(rec)}
           sub={txs.filter(t => t.type === 'receita').length + " lançamentos"}
@@ -115,7 +115,6 @@ export default function Dashboard({ curMonth, curYear }: Props) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        {/* Últimas transações */}
         <div className="md:col-span-2 rounded-2xl p-5" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="text-sm font-bold">Últimas Transações</div>
@@ -129,7 +128,6 @@ export default function Dashboard({ curMonth, curYear }: Props) {
           </div>
         </div>
 
-        {/* Balanço */}
         <div className="rounded-2xl p-5" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
           <div className="text-sm font-bold mb-4">Balanço do Mês</div>
           <div className="flex flex-col gap-2.5">
@@ -154,7 +152,6 @@ export default function Dashboard({ curMonth, curYear }: Props) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Despesas por categoria - Donut */}
         <div className="rounded-2xl p-5" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
           <div className="text-sm font-bold mb-4">Despesas por Categoria</div>
           {catTotals.length ? (
@@ -180,7 +177,6 @@ export default function Dashboard({ curMonth, curYear }: Props) {
           )}
         </div>
 
-        {/* Receitas por categoria */}
         <div className="rounded-2xl p-5" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
           <div className="text-sm font-bold mb-4">Receitas por Categoria</div>
           {recCatTotals.length ? (
