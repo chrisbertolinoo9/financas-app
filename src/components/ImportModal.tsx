@@ -76,14 +76,15 @@ interface Props {
   curMonth: number
   curYear: number
   presetAccId?: string | null
+  presetCardId?: string | null
 }
 
-export default function ImportModal({ onClose, curMonth, curYear, presetAccId }: Props) {
+export default function ImportModal({ onClose, curMonth, curYear, presetAccId, presetCardId }: Props) {
   const { db, save, balances } = useDB()
   const [step, setStep] = useState(1)
   const [files, setFiles] = useState<{file: File; dataUrl: string; type: 'image'|'pdf'; name: string}[]>([])
-  const [destType, setDestType] = useState<'none'|'card'|'acc'>(presetAccId ? 'acc' : 'none')
-  const [destId, setDestId] = useState(presetAccId || '')
+  const [destType, setDestType] = useState<'none'|'card'|'acc'>(presetCardId ? 'card' : presetAccId ? 'acc' : 'none')
+  const [destId, setDestId] = useState(presetCardId || presetAccId || '')
   const [pending, setPending] = useState<PendingRow[]>([])
   const [loading, setLoading] = useState(false)
   const [aiMsg, setAiMsg] = useState('Processando...')
@@ -95,7 +96,9 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
   const fileRef = useRef<HTMLInputElement>(null)
 
   const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
-  const presetAcc = presetAccId ? db.accounts.find(a => a.id === presetAccId) : null
+  const presetAcc  = presetAccId  ? db.accounts.find(a => a.id === presetAccId)  : null
+  const presetCard = presetCardId ? db.cards.find(c => c.id === presetCardId) : null
+  const presetLabel = presetCard ? ('💳 ' + presetCard.name) : presetAcc ? ('🏦 ' + presetAcc.name) : null
 
   function isDup(name: string, val: number, dateISO: string) {
     const month = dateISO.slice(0, 7) // 'YYYY-MM'
@@ -279,7 +282,7 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
           <div>
             <div className="text-base font-bold">📄 Importar Extrato / Fatura</div>
             <div className="text-xs mt-0.5" style={{color:'var(--muted)'}}>
-              {presetAcc ? 'Conta: ' + presetAcc.name + ' · ' + MONTHS[refMonth] + ' ' + refYear : 'Print, imagem ou PDF — a IA extrai e você revisa'}
+              {presetLabel ? presetLabel + ' · ' + MONTHS[refMonth] + ' ' + refYear : 'Print, imagem ou PDF — a IA extrai e você revisa'}
             </div>
           </div>
           <button onClick={onClose} style={{background:'none',border:'none',color:'var(--muted)',fontSize:18,cursor:'pointer',padding:'2px 6px'}}>✕</button>
@@ -346,10 +349,10 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
 
             <div className="rounded-xl p-3.5 mb-4" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
               <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{color:'var(--muted)'}}>📌 Vincular ao</div>
-              {presetAcc ? (
+              {(presetAcc || presetCard) ? (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{background:'var(--glow)',border:'1.5px solid var(--accent)',display:'inline-flex'}}>
-                  <span style={{fontSize:14}}>🏦</span>
-                  <span className="text-xs font-bold" style={{color:'var(--accent)'}}>{presetAcc.name}</span>
+                  <span style={{fontSize:14}}>{presetCard ? '💳' : '🏦'}</span>
+                  <span className="text-xs font-bold" style={{color:'var(--accent)'}}>{presetCard ? presetCard.name : presetAcc?.name}</span>
                   <span className="text-xs" style={{color:'var(--muted)'}}>· pré-selecionado</span>
                 </div>
               ) : (
