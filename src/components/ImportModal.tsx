@@ -20,6 +20,12 @@ TRANSFERENCIAS (type="transferencia") — NÃO são receita nem despesa:
 - Pix para Banco XP / Rico → transferencia
 - "Depósito Recebido por Boleto" → transferencia (benefício Swile transferido para conta)
 - Pix recebido de DAIANA VITORIA → transferencia (repasse entre casal)
+- REGRA ESPECIAL extrato 99PAY — ciclo de CDI (valores que entram e saem em pares):
+  Analise TODOS os "Pagamento com Pix recebido" e "Pagamento com Pix enviado" do extrato.
+  Se um valor de entrada tem um valor de saída IGUAL no mesmo extrato (ex: +R$30.000 e -R$30.000),
+  são movimentações internas de ciclo de rendimento — OMITIR ambos completamente do resultado.
+  Só inclua "Pagamento com Pix recebido" se NÃO tiver saída do mesmo valor (dinheiro real externo).
+  Só inclua "Pagamento com Pix enviado" se NÃO tiver entrada do mesmo valor (despesa real).
 
 RECEITAS (type="receita"):
 - "CAIXA ECONOMICA FEDERAL" entrada → receita, cat="Renda Extra", icon="💰" (FGTS aniversário)
