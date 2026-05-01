@@ -4,7 +4,7 @@ import { C_COLOR, C_ICON, isoToDisplay, genId, fmt } from '../lib/utils'
 import type { Transaction } from '../types'
 
 const PROXY = 'https://financas-proxy.chrisbertolinoo9.workers.dev/v1/messages'
-const CATS = ['Alimentação','Moradia','Transporte','Saúde','Lazer','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Renda Extra','Outros']
+const CATS = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','Lazer','Airsoft','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Gasto Cartão','Renda Extra','Outros']
 
 const AI_PROMPT = `Analise este extrato bancário brasileiro. Retorne APENAS JSON válido sem markdown:
 {"transactions":[{"name":"descrição curta","val":0.00,"type":"receita|despesa|transferencia","cat":"categoria","date":"DD/MM","icon":"emoji"}]}
@@ -14,30 +14,34 @@ REGRAS DE CLASSIFICAÇÃO:
 TRANSFERENCIAS (type="transferencia") — NÃO são receita nem despesa:
 - Qualquer movimentação entre contas do MESMO titular (mesmo CPF, bancos diferentes)
 - "Transferência enviada pelo Pix CHRISTIAN BERTOLINO" → transferencia
-- "Transferência recebida pelo Pix CHRISTIAN BERTOLINO" → transferencia  
+- "Transferência recebida pelo Pix CHRISTIAN BERTOLINO" → transferencia
 - "Transferência enviada pelo Pix DAIANA VITORIA" saída → transferencia
 - Pix para 99PAY / de 99PAY → transferencia (movimentação entre contas próprias)
-- Pix para Banco XP / Rico → transferencia (pagamento de cartão de investimento)
+- Pix para Banco XP / Rico → transferencia
+- "Depósito Recebido por Boleto" → transferencia (benefício Swile transferido para conta)
+- Pix recebido de DAIANA VITORIA → transferencia (repasse entre casal)
 
 RECEITAS (type="receita"):
 - "CAIXA ECONOMICA FEDERAL" entrada → receita, cat="Renda Extra", icon="💰" (FGTS aniversário)
 - Pix recebido do Santander com nome CHRISTIAN BERTOLINO → receita, cat="Salário", icon="💼"
-- "Depósito Recebido por Boleto" → receita, cat="Benefício", icon="🎁" (benefício Swile/VR)
 - "CLAUDETE" ou nome de familiar → receita, cat="Renda Extra", icon="💰"
-- Pix recebido de DAIANA VITORIA → transferencia (repasse entre casal)
 - Rendimentos, cashback, estorno → receita, cat="Renda Extra"
 
 DESPESAS (type="despesa"):
-- "Pagamento de fatura" → despesa, cat="Outros", icon="💳"
-- "RECARGAPAY" saída → despesa, cat="Outros", icon="💳" (recarga cartão pré-pago)
+- "RECARGAPAY" saída → despesa, cat="Gasto Cartão", icon="💳"
+- "Pagamento de fatura" → despesa, cat="Gasto Cartão", icon="💳"
+- "Banco XP" saída → despesa, cat="Gasto Cartão", icon="💳"
 - "UNINTER" → despesa, cat="Educação", icon="📚"
 - "TELEFONICA" ou "VIVO" ou "CLARO" ou "TIM" → despesa, cat="Assinatura", icon="📱"
-- "MARCIO POPILARZ" → despesa, cat="Alimentação", icon="🛒" (supermercado)
-- "PJBANK" → despesa, cat="Moradia", icon="🏠" (aluguel/moradia)
+- "MARCIO POPILARZ" → despesa, cat="Supermercado", icon="🛒"
+- "PJBANK" → despesa, cat="Moradia", icon="🏠" (aluguel)
+- "Even3" ou eventos de airsoft → despesa, cat="Airsoft", icon="🎯"
+- iFood, restaurantes, lanchonetes → despesa, cat="Alimentação", icon="🍽️"
+- Supermercados, mercearias, açougues → despesa, cat="Supermercado", icon="🛒"
 - Pagamento de boleto para empresas → despesa, cat="Outros"
-- Compras, restaurantes, serviços → despesa com categoria adequada
+- Demais compras e serviços → despesa com categoria adequada
 
-CATEGORIAS disponíveis: Alimentação, Moradia, Transporte, Saúde, Lazer, Salário, Freelance, Assinatura, Educação, Vestuário, Combustível, Benefício, Renda Extra, Outros
+CATEGORIAS disponíveis: Alimentação, Supermercado, Moradia, Transporte, Saúde, Lazer, Airsoft, Salário, Freelance, Assinatura, Educação, Vestuário, Combustível, Benefício, Gasto Cartão, Renda Extra, Outros
 
 IMPORTANTE:
 - Valores numéricos puros sem R$ ou pontos de milhar (ex: 1234.56)
