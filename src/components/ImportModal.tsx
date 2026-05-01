@@ -373,21 +373,31 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
             </div>
 
             <div className="rounded-xl overflow-hidden mb-4" style={{border:'1px solid var(--border)',maxHeight:340,overflowY:'auto'}}>
-              <div className="grid gap-1 px-3 py-2 text-xs font-bold uppercase tracking-wide" style={{gridTemplateColumns:'24px 1fr 100px 60px 80px',color:'var(--muted)',borderBottom:'1px solid var(--border)',background:'var(--bg3)'}}>
-                <div/><div>Descrição</div><div>Categoria</div><div>Data</div><div>Valor</div>
+              <div className="grid gap-1 px-3 py-2 text-xs font-bold uppercase tracking-wide" style={{gridTemplateColumns:'24px 1fr 90px 80px 55px 75px',color:'var(--muted)',borderBottom:'1px solid var(--border)',background:'var(--bg3)'}}>
+                <div/><div>Descrição</div><div>Categoria</div><div>Tipo</div><div>Data</div><div>Valor</div>
               </div>
               {pending.map((r,i) => (
                 <div key={r._id} className="grid gap-1 px-3 py-2 items-center transition-colors"
-                  style={{gridTemplateColumns:'24px 1fr 100px 60px 80px',borderBottom:'1px solid var(--border)',background:r.type==='transferencia'?'rgba(99,102,241,.04)':r._dup?'rgba(239,68,68,.04)':r._sel?'':'rgba(0,0,0,.15)',opacity:r._sel?1:.5}}>
+                  style={{gridTemplateColumns:'24px 1fr 90px 80px 55px 75px',borderBottom:'1px solid var(--border)',background:r.type==='transferencia'?'rgba(99,102,241,.04)':r._dup?'rgba(239,68,68,.04)':r._sel?'':'rgba(0,0,0,.15)',opacity:r._sel?1:.5}}>
                   <div onClick={()=>setPending(p=>p.map((x,j)=>j===i?{...x,_sel:!x._sel}:x))}
                     style={{width:17,height:17,borderRadius:4,border:'1px solid var(--border)',background:r._sel?'var(--accent)':'var(--bg3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,cursor:'pointer',color:'#fff'}}>
                     {r._sel?'✓':''}
                   </div>
                   <input value={r.name} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,name:e.target.value}:x))} style={{...inputStyle,padding:'4px 6px',fontSize:11}} />
-                  <div style={{fontFamily:'Sora,sans-serif',fontSize:11,color:typeColor(r.type),fontWeight:700,textAlign:'center'}}>
-                    {r.type==='transferencia' ? '⇄ Transf.' : r.cat}
-                  </div>
-                  <input value={r.date} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,date:e.target.value}:x))} style={{...inputStyle,padding:'4px 6px',fontSize:11}} />
+                  {r.type === 'transferencia' ? (
+                    <div style={{fontSize:10,color:'var(--muted)',fontWeight:700,textAlign:'center'}}>⇄ Transf.</div>
+                  ) : (
+                    <select value={r.cat} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,cat:e.target.value}:x))} style={{...inputStyle,padding:'3px 4px',fontSize:10}}>
+                      {CATS.map(c=><option key={c}>{c}</option>)}
+                    </select>
+                  )}
+                  <select value={r.type} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,type:e.target.value as 'receita'|'despesa'|'transferencia'}:x))}
+                    style={{...inputStyle,padding:'3px 4px',fontSize:10,color:typeColor(r.type)}}>
+                    <option value="despesa">↓ Despesa</option>
+                    <option value="receita">↑ Receita</option>
+                    <option value="transferencia">⇄ Transf.</option>
+                  </select>
+                  <input value={r.date} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,date:e.target.value}:x))} style={{...inputStyle,padding:'3px 4px',fontSize:10}} />
                   <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,fontWeight:700,color:typeColor(r.type)}}>
                     {typePrefix(r.type)} {fmt(r.val)}
                   </div>
