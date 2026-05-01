@@ -517,6 +517,16 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
                   ) : newCatRow === i ? (
                     <div className="flex gap-1">
                       <input autoFocus value={newCatVal} onChange={e=>setNewCatVal(e.target.value)}
+                        onBlur={()=>{
+                          if(newCatVal.trim()) {
+                            const nc = newCatVal.trim()
+                            const updatedCats = [...customCats, nc]
+                            setCustomCats(updatedCats)
+                            localStorage.setItem('fp_custom_import_cats', JSON.stringify(updatedCats))
+                            setPending(p=>p.map((x,j)=>j===i?{...x,cat:nc}:x))
+                          }
+                          setNewCatRow(null); setNewCatVal('')
+                        }}
                         onKeyDown={e=>{
                           if(e.key==='Enter' && newCatVal.trim()) {
                             const nc = newCatVal.trim()
@@ -528,7 +538,7 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
                           }
                           if(e.key==='Escape'){setNewCatRow(null);setNewCatVal('')}
                         }}
-                        placeholder="Nova cat..."
+                        placeholder="Nova cat... (Enter ou clique fora)"
                         style={{...inputStyle,padding:'3px 4px',fontSize:10,flex:1}} />
                     </div>
                   ) : (
