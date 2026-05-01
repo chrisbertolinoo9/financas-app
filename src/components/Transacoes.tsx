@@ -5,11 +5,15 @@ import type { Transaction } from '../types'
 
 interface Props { curMonth: number; curYear: number }
 
-const CATS = ['Alimentação','Moradia','Transporte','Saúde','Lazer','Salário',
-  'Freelance','Assinatura','Educação','Vestuário','Combustível','Outros']
+const CATS = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','Lazer','Airsoft','Viagem','PC','Games',
+  'Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Gasto Cartão','Renda Extra','Outros']
 
 export default function Transacoes({ curMonth, curYear }: Props) {
   const { db, addTransaction, updateTransaction, deleteTransaction, addTransfer } = useDB()
+  const [customCats] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('fp_custom_import_cats') || '[]') } catch { return [] }
+  })
+  const allCats = [...CATS, ...customCats.filter((c: string) => !CATS.includes(c))]
   const [search, setSearch] = useState('')
   const [typeF, setTypeF] = useState('')
   const [showAll, setShowAll] = useState(false)
@@ -277,7 +281,7 @@ export default function Transacoes({ curMonth, curYear }: Props) {
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color:'var(--muted)' }}>Categoria</label>
                     <select value={cat} onChange={e => setCat(e.target.value)} style={inputStyle}>
-                      {CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                      {allCats.map((c: string) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   {/* Conta */}
