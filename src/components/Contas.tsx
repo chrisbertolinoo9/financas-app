@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useDB } from '../contexts/DBContext'
-import { fmt, genId, isoToDisplay, C_COLOR, C_ICON, inMonth, afterMonth } from '../lib/utils'
+import { fmt, genId, isoToDisplay, C_COLOR, C_ICON, inMonth } from '../lib/utils'
 import type { Account, Transaction } from '../types'
 
 interface Props { curMonth: number; curYear: number }
@@ -13,18 +13,10 @@ const ACC_TYPES = [
 const COLORS = ['#6366f1','#22c55e','#06b6d4','#f59e0b','#ef4444','#8b5cf6']
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
-// Calcula saldo da conta no fim do mês/ano selecionado
-// Lógica: o saldo inicial cadastrado representa o saldo ATUAL (hoje)
-// Para meses passados: revertemos as transações que ocorreram DEPOIS do mês
-// Para meses futuros: adicionamos as transações que ocorrerão
-function balanceUpTo(accId: string, txs: Transaction[], initialBalance: number, month: number, year: number) {
-  // Transações que ocorreram DEPOIS do mês selecionado
-  const future = txs.filter(t => t.accId === accId && afterMonth(t.dateISO, month, year))
-  // Para ir "de volta no tempo": revertemos essas transações futuras
-  const futureRec  = future.filter(t => t.type === 'receita').reduce((s,t) => s+t.val, 0)
-  const futureDesp = future.filter(t => t.type === 'despesa').reduce((s,t) => s+t.val, 0)
-  // Saldo no fim do mês = saldo atual - receitas futuras + despesas futuras
-  return initialBalance - futureRec + futureDesp
+// Saldo da conta = sempre o balance atual salvo (fonte da verdade)
+// O balance já foi calculado corretamente ao longo do uso
+function balanceUpTo(_accId: string, _txs: Transaction[], _init: number, _m: number, _y: number, balance: number) {
+  return balance
 }
 
 export default function Contas({ curMonth, curYear }: Props) {
@@ -44,7 +36,7 @@ export default function Contas({ curMonth, curYear }: Props) {
 
   // Saldo de cada conta ATÉ o mês selecionado
   const balances = useMemo(() =>
-    Object.fromEntries(active.map(a => [a.id, balanceUpTo(a.id, db.transactions, a.initialBalance||0, curMonth, curYear)])),
+    Object.fromEntries(active.map(a => [a.id, a.balance])),
     [active, db.transactions, curMonth, curYear]
   )
   const total = useMemo(() => Object.values(balances).reduce((s,v) => s+v, 0), [balances])
@@ -82,7 +74,7 @@ export default function Contas({ curMonth, curYear }: Props) {
   const accRecMes  = useMemo(() => detailAcc ? db.transactions.filter(t=>t.accId===detailAcc.id&&inMonth(t.dateISO,curMonth,curYear)&&t.type==='receita').reduce((s,t)=>s+t.val,0) : 0, [detailAcc, db.transactions, curMonth, curYear])
   const accDespMes = useMemo(() => detailAcc ? db.transactions.filter(t=>t.accId===detailAcc.id&&inMonth(t.dateISO,curMonth,curYear)&&t.type==='despesa').reduce((s,t)=>s+t.val,0) : 0, [detailAcc, db.transactions, curMonth, curYear])
   // Saldo até o mês para a conta no drawer
-  const detailBal = useMemo(() => detailAcc ? balanceUpTo(detailAcc.id, db.transactions, detailAcc.initialBalance||0, curMonth, curYear) : 0, [detailAcc, db.transactions, curMonth, curYear])
+  const detailBal = detailAcc ? detailAcc.balance : 0
 
   const tabBtn = (id: 'all'|'month'|'despesa'|'receita', label: string, activeColor: string) => (
     <button onClick={() => setTxTab(id)} style={{
@@ -155,7 +147,7 @@ export default function Contas({ curMonth, curYear }: Props) {
             <div className="font-mono text-lg font-extrabold" style={{color:balances[a.id]>=0?'var(--green)':'var(--red)'}}>
               R$ {fmt(balances[a.id])}
             </div>
-            <div className="text-xs mt-0.5" style={{color:'var(--muted)'}}>até {MONTHS[curMonth]} {curYear}</div>
+            
             <div className="mt-3 pt-3 text-center" style={{borderTop:'1px solid var(--border)'}}>
               <span className="text-xs font-bold" style={{color:'var(--accent)'}}>VER DETALHES →</span>
             </div>
@@ -208,7 +200,7 @@ export default function Contas({ curMonth, curYear }: Props) {
                 {ACC_TYPES.find(t=>t.val===detailAcc.type)?.lbl||detailAcc.type}
               </div>
               <div className="text-xs mb-1" style={{color:'var(--muted)'}}>
-                Saldo até {MONTHS[curMonth]} {curYear}
+                Saldo Atual
               </div>
               <div className="font-mono text-3xl font-extrabold mb-4" style={{color:detailBal>=0?'var(--green)':'var(--red)'}}>
                 R$ {fmt(detailBal)}
