@@ -11,8 +11,40 @@ const BRANDS = ['Visa','Mastercard','Elo','Amex','Hipercard','Outro']
 const CARD_COLORS = ['#8b5cf6','#6366f1','#3b82f6','#06b6d4','#22c55e','#f59e0b','#ef4444']
 const CATS = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','Lazer','Airsoft','Viagem','PC','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Gasto Cartão','Renda Extra','Outros']
 
+const RCP_PROXY = 'https://financas-proxy.chrisbertolinoo9.workers.dev/v1/messages'
+const MONTHS_RCP = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+
+const RCP_PROMPT = `Analise esta fatura da RecargaPay que contém múltiplos cartões.
+Retorne APENAS JSON válido sem markdown:
+{"transactions":[{"cardNumber":"2644","name":"descrição","val":0.00,"cat":"categoria","date":"DD/MM","icon":"emoji","parcela":"X/Y ou null"}]}
+
+REGRAS:
+- Identifique a seção de cada cartão pelo número que aparece: "Cartão •••• •••• •••• 2644" ou "•••• 2397"
+- Inclua o campo cardNumber com "2644" ou "2397" conforme a seção do cartão
+- Todas as transações são despesas (não inclua o campo type)
+- Valores numéricos puros sem R$ (ex: 165.00)
+- Descrição: copie EXATAMENTE como aparece, sem resumir
+- Se houver indicação de parcela como (1/12) ou (2/4) no nome, extraia para o campo parcela (ex: "1/12")
+- Caso contrário, parcela = null
+- Ignore seções de "Próxima fatura", "Total de compras parceladas", encargos e simulações
+- Inclua TODAS as transações de ambos os cartões`
+
+interface RcpRow {
+  _id: number
+  _sel: boolean
+  _dup: boolean
+  cardNumber: string
+  name: string
+  val: number
+  cat: string
+  icon: string
+  date: string
+  dateISO: string
+  parcela: string | null
+}
+
 export default function Cartoes({ curMonth, curYear }: Props) {
-  const { db, addCard, updateCard, deleteCard, addTransaction, updateTransaction, deleteTransaction } = useDB()
+  const { db, save, addCard, updateCard, deleteCard, addTransaction, updateTransaction, deleteTransaction } = useDB()
   const [cardModal, setCardModal] = useState(false)
   const [editCardId, setEditCardId] = useState<string|null>(null)
   const [cName, setCName] = useState('')
@@ -51,6 +83,16 @@ export default function Cartoes({ curMonth, curYear }: Props) {
   const [importCardId, setImportCardId] = useState<string|null>(null)
   const [importMonth, setImportMonth] = useState(curMonth)
   const [importYear, setImportYear] = useState(curYear)
+  const [showRecargaPay, setShowRecargaPay] = useState(false)
+  const [rcpMonth, setRcpMonth] = useState(curMonth)
+  const [rcpYear, setRcpYear]   = useState(curYear)
+  const [rcpFile, setRcpFile]   = useState<{file:File;dataUrl:string;name:string}|null>(null)
+  const [rcpStep, setRcpStep]   = useState<'upload'|'loading'|'review'|'done'>('upload')
+  const [rcpRows2644, setRcpRows2644] = useState<RcpRow[]>([])
+  const [rcpRows2397, setRcpRows2397] = useState<RcpRow[]>([])
+  const [rcpImported, setRcpImported] = useState(0)
+  const [rcpProg, setRcpProg]   = useState(0)
+  const [rcpMsg, setRcpMsg]     = useState('Processando...')
   const [showImportPicker, setShowImportPicker] = useState(false)
 
   function cardSpend(cardId: string) {
@@ -105,6 +147,112 @@ export default function Cartoes({ curMonth, curYear }: Props) {
     return db.transactions.filter(t => t.cardId===invoiceCard.id && txBelongsToInvoice(t, invoiceCard, curMonth, curYear)).sort((a,b)=>b.dateISO.localeCompare(a.dateISO))
   }, [invoiceCard, db.transactions, curMonth, curYear])
 
+  const CATS_RCP = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','Lazer','Airsoft','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Gasto Cartão','Renda Extra','Outros']
+
+  function rcpIsDup(name: string, val: number, dateISO: string) {
+    return db.transactions.some(t =>
+      t.name.toLowerCase() === name.toLowerCase() &&
+      Math.abs(t.val - val) < 0.02 &&
+      t.dateISO === dateISO
+    )
+  }
+
+  async function rcpRunAI() {
+    if (!rcpFile) return
+    setRcpStep('loading'); setRcpProg(0); setRcpMsg('Lendo fatura...')
+    const pInt = setInterval(() => setRcpProg(p => Math.min(p + 8, 88)), 500)
+    try {
+      const isPdf = rcpFile.file.type === 'application/pdf' || rcpFile.name.endsWith('.pdf')
+      const contentArr: object[] = []
+      if (isPdf) {
+        contentArr.push({ type:'document', source:{ type:'base64', media_type:'application/pdf', data: rcpFile.dataUrl.split(',')[1] } })
+      } else {
+        contentArr.push({ type:'image', source:{ type:'base64', media_type: rcpFile.file.type||'image/jpeg', data: rcpFile.dataUrl.split(',')[1] } })
+      }
+      contentArr.push({ type:'text', text: RCP_PROMPT })
+      const headers: Record<string,string> = { 'Content-Type':'application/json' }
+      if (isPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25'
+      const resp = await fetch(RCP_PROXY, { method:'POST', headers, body: JSON.stringify({ model:'claude-opus-4-5', max_tokens:4000, messages:[{ role:'user', content: contentArr }] }) })
+      const data = await resp.json()
+      clearInterval(pInt)
+      if (data.error) throw new Error(data.error.message)
+      const raw = data.content.map((b: {text?:string}) => b.text||'').join('').replace(/```json|```/g,'').trim()
+      const extracted = JSON.parse(raw)
+      const mm = String(rcpMonth + 1).padStart(2,'0')
+      const rows: RcpRow[] = (extracted.transactions||[]).map((t: {cardNumber:string;name:string;val:number;cat:string;icon:string;date:string;parcela:string|null}, i: number) => {
+        const parts = (t.date||'').split('/')
+        const dateISO = parts.length===2 ? `${rcpYear}-${mm}-${parts[0].padStart(2,'0')}` : `${rcpYear}-${mm}-01`
+        return {
+          _id: i, _sel: true, _dup: rcpIsDup(t.name, t.val, dateISO),
+          cardNumber: t.cardNumber || '2644',
+          name: t.name, val: t.val, cat: t.cat, icon: t.icon||'💳',
+          date: t.date, dateISO,
+          parcela: t.parcela || null,
+        }
+      })
+      setRcpProg(100)
+      setRcpRows2644(rows.filter(r => r.cardNumber === '2644'))
+      setRcpRows2397(rows.filter(r => r.cardNumber === '2397'))
+      await new Promise(r => setTimeout(r, 300))
+      setRcpStep('review')
+    } catch(e) {
+      clearInterval(pInt)
+      setRcpMsg('Erro: ' + String(e))
+      setTimeout(() => setRcpStep('upload'), 3000)
+    }
+  }
+
+  function rcpDoImport() {
+    const card2644 = db.cards.find(c => c.name.includes('2644'))
+    const card2397 = db.cards.find(c => c.name.includes('2397'))
+    const allNew: Transaction[] = []
+    const futureParcelas: Transaction[] = []
+
+    const processRows = (rows: RcpRow[], card: typeof card2644) => {
+      if (!card) return
+      rows.filter(r => r._sel).forEach(r => {
+        const tx: Transaction = {
+          id: genId(), name: r.name, cat: r.cat, type: 'despesa', val: r.val,
+          dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
+          icon: r.icon || C_ICON[r.cat] || '💳',
+          color: C_COLOR[r.cat] || '#6b7591',
+          accId: null, cardId: card.id, toAccId: null,
+          invoiceMonth: rcpMonth, invoiceYear: rcpYear,
+        }
+        allNew.push(tx)
+        // Parcelas futuras
+        if (r.parcela) {
+          const match = r.parcela.match(/^(\d+)\/(\d+)$/)
+          if (match) {
+            const cur = parseInt(match[1]); const tot = parseInt(match[2])
+            for (let i = 1; i <= tot - cur; i++) {
+              let futM = rcpMonth + i; let futY = rcpYear
+              while (futM > 11) { futM -= 12; futY++ }
+              futureParcelas.push({
+                id: genId(),
+                name: r.name.replace(/\(\d+\/\d+\)/, `(${cur+i}/${tot})`),
+                cat: r.cat, type: 'despesa', val: r.val,
+                dateISO: futY + '-' + String(futM+1).padStart(2,'0') + '-01',
+                date: '01/' + String(futM+1).padStart(2,'0'),
+                icon: tx.icon, color: tx.color,
+                accId: null, cardId: card.id, toAccId: null,
+                invoiceMonth: futM, invoiceYear: futY,
+              })
+            }
+          }
+        }
+      })
+    }
+
+    processRows(rcpRows2644, card2644)
+    processRows(rcpRows2397, card2397)
+
+    const total = allNew.length + futureParcelas.length
+    save({ ...db, transactions: [...allNew, ...futureParcelas, ...db.transactions] })
+    setRcpImported(total)
+    setRcpStep('done')
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
@@ -112,10 +260,17 @@ export default function Cartoes({ curMonth, curYear }: Props) {
           <div className="text-lg font-extrabold">Cartões de Crédito</div>
           <div className="text-xs mt-0.5" style={{ color:'var(--muted)' }}>Clique em um cartão para ver a fatura</div>
         </div>
-        <button onClick={openNewCard} className="px-4 py-2.5 rounded-xl text-sm font-bold text-white"
-          style={{ background:'linear-gradient(135deg,var(--accent),var(--accent2))', border:'none', cursor:'pointer', fontFamily:'Sora,sans-serif' }}>
-          + Novo Cartão
-        </button>
+        <div className="flex gap-2">
+          <button onClick={()=>{setShowRecargaPay(true);setRcpStep('upload');setRcpFile(null);setRcpMonth(curMonth);setRcpYear(curYear)}}
+            className="px-4 py-2.5 rounded-xl text-sm font-bold"
+            style={{ background:'var(--bg3)', border:'1px solid rgba(245,158,11,.4)', color:'#f59e0b', cursor:'pointer', fontFamily:'Sora,sans-serif' }}>
+            📄 Importar RecargaPay
+          </button>
+          <button onClick={openNewCard} className="px-4 py-2.5 rounded-xl text-sm font-bold text-white"
+            style={{ background:'linear-gradient(135deg,var(--accent),var(--accent2))', border:'none', cursor:'pointer', fontFamily:'Sora,sans-serif' }}>
+            + Novo Cartão
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -466,5 +621,179 @@ export default function Cartoes({ curMonth, curYear }: Props) {
         </div>
       )}
     </div>
+
+      {/* ── Modal RecargaPay ── */}
+      {showRecargaPay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{background:'rgba(0,0,0,.8)',backdropFilter:'blur(8px)'}}
+          onClick={e=>{if(e.target===e.currentTarget){setShowRecargaPay(false)}}}>
+          <div className="w-full rounded-2xl p-6 overflow-y-auto"
+            style={{background:'var(--card2)',border:'1px solid var(--border)',maxWidth:680,maxHeight:'92vh',animation:'mdIn .2s ease'}}>
+
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-base font-bold">📄 Importar RecargaPay</div>
+                <div className="text-xs mt-0.5" style={{color:'var(--muted)'}}>Fatura com múltiplos cartões — importa 2644 e 2397 de uma vez</div>
+              </div>
+              <button onClick={()=>setShowRecargaPay(false)} style={{background:'none',border:'none',color:'var(--muted)',fontSize:18,cursor:'pointer'}}>✕</button>
+            </div>
+
+            {/* Steps */}
+            <div className="flex items-center mb-5">
+              {['Upload','Análise IA','Revisão','Concluído'].map((lbl,i)=>{
+                const n = i+1
+                const s = rcpStep==='upload'?1:rcpStep==='loading'?2:rcpStep==='review'?3:4
+                return (
+                  <div key={lbl} className="flex items-center" style={{flex:i<3?1:'auto'}}>
+                    <div className="flex items-center gap-1.5">
+                      <div style={{width:22,height:22,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,flexShrink:0,
+                        background:s>n?'var(--green)':s===n?'var(--accent)':'var(--bg3)',
+                        border:`1px solid ${s>n?'var(--green)':s===n?'var(--accent)':'var(--border)'}`,
+                        color:s>=n?'#fff':'var(--muted)'}}>
+                        {s>n?'✓':n}
+                      </div>
+                      <span className="text-xs font-semibold" style={{color:s===n?'var(--text)':'var(--muted)',whiteSpace:'nowrap'}}>{lbl}</span>
+                    </div>
+                    {i<3 && <div className="flex-1 h-px mx-2" style={{background:'var(--border)'}} />}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* UPLOAD */}
+            {rcpStep==='upload' && (
+              <div className="flex flex-col gap-4">
+                <div className="rounded-xl p-3" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
+                  <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{color:'var(--muted)'}}>📅 Mês de referência</div>
+                  <div className="flex gap-2">
+                    <select value={rcpMonth} onChange={e=>setRcpMonth(Number(e.target.value))}
+                      style={{flex:1,background:'var(--bg)',border:'1.5px solid var(--border)',borderRadius:8,padding:'9px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                      {MONTHS_RCP.map((m,i)=><option key={i} value={i}>{m}</option>)}
+                    </select>
+                    <select value={rcpYear} onChange={e=>setRcpYear(Number(e.target.value))}
+                      style={{width:100,background:'var(--bg)',border:'1.5px solid var(--border)',borderRadius:8,padding:'9px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                      {[curYear-2,curYear-1,curYear,curYear+1].map(y=><option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="relative rounded-xl p-8 text-center"
+                  style={{border:'2px dashed var(--border)',cursor:'pointer'}}
+                  onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.borderColor='#f59e0b'}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.borderColor='var(--border)'}}>
+                  <input type="file" accept="image/*,application/pdf,.pdf" onChange={e=>{
+                    const file = e.target.files?.[0]; if(!file) return
+                    const reader = new FileReader()
+                    reader.onload = ev => setRcpFile({file, dataUrl: ev.target?.result as string, name: file.name})
+                    reader.readAsDataURL(file)
+                  }} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}} />
+                  {rcpFile ? (
+                    <div>
+                      <div className="text-2xl mb-1">📄</div>
+                      <div className="text-sm font-bold" style={{color:'#f59e0b'}}>{rcpFile.name}</div>
+                      <div className="text-xs mt-1" style={{color:'var(--muted)'}}>clique para trocar</div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="text-3xl mb-2">🖼️</div>
+                      <div className="text-sm font-bold mb-1">Selecione a fatura RecargaPay</div>
+                      <div className="text-xs" style={{color:'var(--muted)'}}>PDF ou imagem — com os dois cartões juntos</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                  <button onClick={()=>setShowRecargaPay(false)} style={{padding:'10px 20px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>Cancelar</button>
+                  <button onClick={rcpRunAI} disabled={!rcpFile}
+                    style={{padding:'10px 20px',background:rcpFile?'linear-gradient(135deg,#f59e0b,#d97706)':'var(--bg3)',border:'none',borderRadius:'9px',color:rcpFile?'#fff':'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:700,cursor:rcpFile?'pointer':'not-allowed'}}>
+                    ✨ Analisar com IA
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* LOADING */}
+            {rcpStep==='loading' && (
+              <div className="py-8">
+                <div className="rounded-xl p-5" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
+                  <div className="text-sm font-bold mb-1">{rcpMsg}</div>
+                  <div className="text-xs mb-3" style={{color:'var(--muted)'}}>Separando transações por cartão...</div>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{background:'var(--bg)'}}>
+                    <div className="h-full rounded-full transition-all" style={{width:rcpProg+'%',background:'linear-gradient(90deg,#f59e0b,#d97706)'}} />
+                  </div>
+                  <div className="text-xs text-right mt-1" style={{color:'var(--muted)'}}>{Math.round(rcpProg)}%</div>
+                </div>
+              </div>
+            )}
+
+            {/* REVISÃO */}
+            {rcpStep==='review' && (
+              <div className="flex flex-col gap-4">
+                {[{label:'💳 Recarga Pay 2644', rows:rcpRows2644, setter:setRcpRows2644, color:'var(--accent)'},{label:'💳 Recarga Pay 2397 - Dai', rows:rcpRows2397, setter:setRcpRows2397, color:'var(--cyan)'}].map(({label,rows,setter,color})=>(
+                  <div key={label} className="rounded-xl overflow-hidden" style={{border:'1px solid var(--border)'}}>
+                    <div className="flex items-center justify-between px-4 py-2.5" style={{background:'var(--bg3)',borderBottom:'1px solid var(--border)'}}>
+                      <span className="text-xs font-bold" style={{color}}>{label}</span>
+                      <span className="text-xs" style={{color:'var(--muted)'}}>{rows.filter(r=>r._sel).length} selecionados · R$ {fmt(rows.filter(r=>r._sel).reduce((s,r)=>s+r.val,0))}</span>
+                    </div>
+                    {rows.length === 0 ? (
+                      <div className="text-center py-4 text-xs" style={{color:'var(--muted)'}}>Nenhuma transação detectada</div>
+                    ) : (
+                      <div style={{maxHeight:200,overflowY:'auto'}}>
+                        <div className="grid gap-1 px-3 py-1.5 text-xs font-bold uppercase tracking-wide" style={{gridTemplateColumns:'20px 1fr 85px 50px 48px 70px',color:'var(--muted)',borderBottom:'1px solid var(--border)',background:'var(--bg3)',fontSize:8}}>
+                          <div/><div>Descrição</div><div>Categoria</div><div>Data</div><div>Parc.</div><div>Valor</div>
+                        </div>
+                        {rows.map((r,i)=>(
+                          <div key={r._id} className="grid gap-1 px-3 py-1.5 items-center"
+                            style={{gridTemplateColumns:'20px 1fr 85px 50px 48px 70px',borderBottom:'1px solid var(--border)',background:r._dup?'rgba(239,68,68,.04)':'',opacity:r._sel?1:.45}}>
+                            <div onClick={()=>setter(p=>p.map((x,j)=>j===i?{...x,_sel:!x._sel}:x))}
+                              style={{width:15,height:15,borderRadius:3,border:'1px solid var(--border)',background:r._sel?color:'var(--bg3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,cursor:'pointer',color:'#fff',flexShrink:0}}>
+                              {r._sel?'✓':''}
+                            </div>
+                            <div className="text-xs truncate font-medium" title={r.name}>{r._dup?'⚠️ ':''}{r.name}</div>
+                            <select value={r.cat} onChange={e=>setter(p=>p.map((x,j)=>j===i?{...x,cat:e.target.value}:x))}
+                              style={{background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:5,padding:'2px 4px',fontFamily:'Sora,sans-serif',fontSize:9,color:'var(--text)',outline:'none',width:'100%'}}>
+                              {CATS_RCP.map(c=><option key={c}>{c}</option>)}
+                            </select>
+                            <div className="text-xs" style={{color:'var(--muted)'}}>{r.date}</div>
+                            <div className="text-xs text-center" style={{color:'var(--muted)'}}>{r.parcela||'—'}</div>
+                            <div className="font-mono text-xs font-bold text-right" style={{color:'var(--red)'}}>- {fmt(r.val)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <div className="flex gap-2 justify-end">
+                  <button onClick={()=>setRcpStep('upload')} style={{padding:'10px 20px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>← Voltar</button>
+                  <button onClick={rcpDoImport}
+                    style={{padding:'10px 24px',background:'linear-gradient(135deg,#f59e0b,#d97706)',border:'none',borderRadius:'9px',color:'#fff',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>
+                    Importar {rcpRows2644.filter(r=>r._sel).length + rcpRows2397.filter(r=>r._sel).length} lançamentos
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* CONCLUÍDO */}
+            {rcpStep==='done' && (
+              <div className="text-center py-10">
+                <div className="text-5xl mb-3">✅</div>
+                <div className="text-lg font-extrabold mb-2">{rcpImported} lançamento{rcpImported!==1?'s':''} importado{rcpImported!==1?'s':''}!</div>
+                <div className="text-xs mb-6" style={{color:'var(--muted)'}}>Salvos nos dois cartões e sincronizados na nuvem.</div>
+                <div className="flex gap-3 justify-center">
+                  <button onClick={()=>{setRcpStep('upload');setRcpFile(null)}} style={{padding:'10px 20px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>
+                    📄 Importar outra fatura
+                  </button>
+                  <button onClick={()=>setShowRecargaPay(false)} style={{padding:'10px 20px',background:'linear-gradient(135deg,#f59e0b,#d97706)',border:'none',borderRadius:'9px',color:'#fff',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>
+                    Ver Cartões
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
   )
 }
