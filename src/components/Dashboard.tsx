@@ -47,7 +47,7 @@ function TxRow({ t }: { t: Transaction }) {
 }
 
 export default function Dashboard({ curMonth, curYear }: Props) {
-  const { db } = useDB()
+  const { db, balances } = useDB()
 
   const txs = useMemo(() =>
     db.transactions.filter(t => inMonth(t.dateISO, curMonth, curYear)),
@@ -56,7 +56,7 @@ export default function Dashboard({ curMonth, curYear }: Props) {
 
   const rec  = useMemo(() => txs.filter(t => t.type === 'receita').reduce((s, t) => s + t.val, 0), [txs])
   const desp = useMemo(() => txs.filter(t => t.type === 'despesa').reduce((s, t) => s + t.val, 0), [txs])
-  const saldo = useMemo(() => db.accounts.filter(a => !a.archived).reduce((s, a) => s + a.balance, 0), [db.accounts])
+  const saldo = useMemo(() => db.accounts.filter(a => !a.archived).reduce((s, a) => s + (balances[a.id] ?? 0), 0), [db.accounts, balances])
   const cartTot = useMemo(() =>
     db.cards.reduce((s, c) =>
       s + db.transactions.filter(t => t.cardId === c.id && txBelongsToInvoice(t, c, curMonth, curYear) && t.type === 'despesa').reduce((x, t) => x + t.val, 0), 0),
