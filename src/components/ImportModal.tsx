@@ -166,33 +166,69 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
     const finalCardId = destType==='card' ? destId : null
     const finalAccId  = destType==='acc'  ? destId : null
 
-    // Monta todas as transacoes de uma vez e salva em batch — evita problema de closure
-    const newTxs: Transaction[] = toImp.map(r => {
+    // Monta todas as transacoes em batch
+    // Para transferencias: tenta encontrar par espelho ja existente no DB
+    // (mesma data, mesmo valor, type=transferencia, accId diferente)
+    // Se encontrar → vincula as duas contas automaticamente (toAccId <-> accId)
+    const allTxs = [...db.transactions]
+    const newTxs: Transaction[] = []
+    const patchedExisting: Map<string, Transaction> = new Map()
+
+    toImp.forEach(r => {
       if (r.type === 'transferencia') {
-        return {
-          id: genId(), name: r.name, cat: 'Transferência',
-          type: 'transferencia' as const, val: r.val,
-          dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
-          icon: '⇄', color: '#6b7591',
-          accId: finalAccId, cardId: null, toAccId: null,
-          invoiceMonth: null, invoiceYear: null,
+        // Busca par espelho: mesma data e valor, ja salvo em outra conta
+        const mirror = allTxs.find(t =>
+          t.type === 'transferencia' &&
+          t.dateISO === r.dateISO &&
+          Math.abs(t.val - r.val) < 0.02 &&
+          t.accId !== finalAccId &&
+          !t.toAccId // ainda nao vinculado
+        )
+
+        if (mirror && finalAccId) {
+          // Vincula o par: mirror.toAccId = finalAccId, novo.toAccId = mirror.accId
+          const linkedMirror = { ...mirror, toAccId: finalAccId }
+          patchedExisting.set(mirror.id, linkedMirror)
+          newTxs.push({
+            id: genId(), name: r.name, cat: 'Transferência',
+            type: 'transferencia' as const, val: r.val,
+            dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
+            icon: '⇄', color: '#6b7591',
+            accId: finalAccId, cardId: null, toAccId: mirror.accId,
+            invoiceMonth: null, invoiceYear: null,
+          })
+        } else {
+          // Sem par — salva sem vinculo por enquanto
+          newTxs.push({
+            id: genId(), name: r.name, cat: 'Transferência',
+            type: 'transferencia' as const, val: r.val,
+            dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
+            icon: '⇄', color: '#6b7591',
+            accId: finalAccId, cardId: null, toAccId: null,
+            invoiceMonth: null, invoiceYear: null,
+          })
         }
-      }
-      return {
-        id: genId(), name: r.name, cat: r.cat, type: r.type as 'receita'|'despesa', val: r.val,
-        dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
-        icon: r.icon || C_ICON[r.cat] || '💰',
-        color: C_COLOR[r.cat] || '#6b7591',
-        accId: finalCardId ? null : finalAccId,
-        cardId: finalCardId,
-        toAccId: null,
-        invoiceMonth: finalCardId ? refMonth : null,
-        invoiceYear:  finalCardId ? refYear  : null,
+      } else {
+        newTxs.push({
+          id: genId(), name: r.name, cat: r.cat, type: r.type as 'receita'|'despesa', val: r.val,
+          dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
+          icon: r.icon || C_ICON[r.cat] || '💰',
+          color: C_COLOR[r.cat] || '#6b7591',
+          accId: finalCardId ? null : finalAccId,
+          cardId: finalCardId,
+          toAccId: null,
+          invoiceMonth: finalCardId ? refMonth : null,
+          invoiceYear:  finalCardId ? refYear  : null,
+        })
       }
     })
 
-    // Salva tudo de uma vez no DB
-    save({ ...db, transactions: [...newTxs, ...db.transactions] })
+    // Aplica patches nas transferencias existentes que foram vinculadas
+    const updatedExisting = allTxs.map(t =>
+      patchedExisting.has(t.id) ? patchedExisting.get(t.id)! : t
+    )
+
+    save({ ...db, transactions: [...newTxs, ...updatedExisting] })
     setImported(toImp.length); setStep(4)
   }
 
