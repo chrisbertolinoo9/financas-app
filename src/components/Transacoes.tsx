@@ -16,6 +16,7 @@ export default function Transacoes({ curMonth, curYear }: Props) {
   const allCats = [...CATS, ...customCats.filter((c: string) => !CATS.includes(c))]
   const [search, setSearch] = useState('')
   const [typeF, setTypeF] = useState('')
+  const [accF, setAccF] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState<string|null>(null)
@@ -46,8 +47,9 @@ export default function Transacoes({ curMonth, curYear }: Props) {
     let txs = baseTxs
     if (search) txs = txs.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.cat.toLowerCase().includes(search.toLowerCase()))
     if (typeF) txs = txs.filter(t => t.type === typeF)
+    if (accF) txs = txs.filter(t => t.accId === accF || (t.cardId && accF === '__card__'))
     return txs
-  }, [baseTxs, search, typeF])
+  }, [baseTxs, search, typeF, accF])
 
   // Totais do mes — transferencias nao entram
   const totalRec  = useMemo(() => monthTxs.filter(t => t.type === 'receita').reduce((s,t) => s+t.val, 0), [monthTxs])
@@ -149,11 +151,18 @@ export default function Transacoes({ curMonth, curYear }: Props) {
       <div className="flex gap-2 mb-5 flex-wrap items-center">
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="🔍 Buscar..." style={{ ...inputStyle, maxWidth: 220 }} />
-        <select value={typeF} onChange={e => setTypeF(e.target.value)} style={{ ...inputStyle, maxWidth: 160 }}>
-          <option value="">Todos</option>
+        <select value={typeF} onChange={e => setTypeF(e.target.value)} style={{ ...inputStyle, maxWidth: 140 }}>
+          <option value="">Todos tipos</option>
           <option value="receita">Receitas</option>
           <option value="despesa">Despesas</option>
           <option value="transferencia">Transferências</option>
+        </select>
+        <select value={accF} onChange={e => setAccF(e.target.value)} style={{ ...inputStyle, maxWidth: 150 }}>
+          <option value="">Todas contas</option>
+          {db.accounts.filter(a => !a.archived).map(a => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+          {db.cards.length > 0 && <option value="__card__">Cartões</option>}
         </select>
         <button onClick={() => setShowAll(v => !v)}
           style={{ padding:'8px 14px', borderRadius:9, border:'1px solid var(--border)', background: showAll ? 'var(--glow)' : 'transparent', color: showAll ? 'var(--accent)' : 'var(--muted)', fontFamily:'Sora,sans-serif', fontSize:12, fontWeight:600, cursor:'pointer' }}>
