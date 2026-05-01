@@ -15,7 +15,7 @@ const COLORS = ['#6366f1','#22c55e','#06b6d4','#f59e0b','#ef4444','#8b5cf6']
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
 export default function Contas({ curMonth, curYear }: Props) {
-  const { db, addAccount, updateAccount, deleteAccount, balances } = useDB()
+  const { db, save, addAccount, updateAccount, deleteAccount, balances } = useDB()
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState<string|null>(null)
   const [name, setName] = useState('')
@@ -29,6 +29,12 @@ export default function Contas({ curMonth, curYear }: Props) {
   const [importMonth, setImportMonth] = useState(curMonth)
   const [importYear, setImportYear]   = useState(curYear)
   const [showImportPicker, setShowImportPicker] = useState(false)
+  const [showReajuste, setShowReajuste] = useState(false)
+  const [reajusteAccId, setReajusteAccId] = useState<string|null>(null)
+  const [reajusteMonth, setReajusteMonth] = useState(curMonth)
+  const [reajusteYear, setReajusteYear]   = useState(curYear)
+  const [reajusteVal, setReajusteVal]     = useState('')
+  const [reajusteDesc, setReajusteDesc]   = useState('Reajuste de saldo')
 
   const active   = useMemo(() => db.accounts.filter(a => !a.archived), [db.accounts])
   const archived = useMemo(() => db.accounts.filter(a => a.archived),  [db.accounts])
@@ -62,6 +68,42 @@ export default function Contas({ curMonth, curYear }: Props) {
     setImportMonth(curMonth)
     setImportYear(curYear)
     setShowImportPicker(true)
+  }
+
+  function openReajuste(accId: string) {
+    setReajusteAccId(accId)
+    setReajusteMonth(curMonth)
+    setReajusteYear(curYear)
+    setReajusteVal('')
+    setReajusteDesc('Reajuste de saldo')
+    setShowReajuste(true)
+  }
+
+  function doSaveReajuste() {
+    if (!reajusteAccId || !reajusteVal) return
+    const raw = parseFloat(String(reajusteVal).replace(',', '.'))
+    if (isNaN(raw) || raw === 0) return
+    const mm = String(reajusteMonth + 1).padStart(2, '0')
+    const dateISO = reajusteYear + '-' + mm + '-01'
+    const tx: Transaction = {
+      id: genId(),
+      name: reajusteDesc.trim() || 'Reajuste de saldo',
+      cat: 'Outros',
+      type: raw > 0 ? 'receita' : 'despesa',
+      val: Math.abs(raw),
+      dateISO,
+      date: '01/' + mm,
+      icon: '⚖️',
+      color: '#6b7591',
+      accId: reajusteAccId,
+      cardId: null,
+      toAccId: null,
+      invoiceMonth: null,
+      invoiceYear: null,
+    }
+    save({ ...db, transactions: [tx, ...db.transactions] })
+    setShowReajuste(false)
+    setReajusteVal('')
   }
 
   const accTxs = useMemo(() => {
@@ -220,6 +262,10 @@ export default function Contas({ curMonth, curYear }: Props) {
                   style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',color:'var(--muted2)',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
                   <span style={{fontSize:18}}>✏️</span>Editar
                 </button>
+                <button onClick={()=>openReajuste(detailAcc.id)}
+                  style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'var(--bg3)',border:'1px solid rgba(245,158,11,.4)',color:'#f59e0b',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
+                  <span style={{fontSize:18}}>⚖️</span>Reajuste
+                </button>
                 <button onClick={()=>{setDelId(detailAcc.id);setDetailAcc(null)}}
                   style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',color:'var(--muted2)',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
                   <span style={{fontSize:18}}>🗑</span>Excluir
@@ -352,6 +398,89 @@ export default function Contas({ curMonth, curYear }: Props) {
         />
       )}
 
+      {/* Modal Reajuste de Saldo */}
+      {showReajuste && reajusteAccId && (() => {
+        const acc = db.accounts.find(a => a.id === reajusteAccId)
+        if (!acc) return null
+        const balAtual = balances[reajusteAccId] ?? 0
+        const raw = parseFloat(String(reajusteVal).replace(',','.'))
+        const previewBal = balAtual + (isNaN(raw) ? 0 : raw)
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{background:'rgba(0,0,0,.8)',backdropFilter:'blur(8px)'}}
+            onClick={e=>{if(e.target===e.currentTarget)setShowReajuste(false)}}>
+            <div className="w-full max-w-sm rounded-2xl p-6" style={{background:'var(--card2)',border:'1px solid var(--border)',animation:'mdIn .2s ease'}}>
+              <div className="text-base font-bold mb-1">⚖️ Reajuste de Saldo</div>
+              <div className="text-xs mb-4" style={{color:'var(--muted)'}}>
+                Conta: <span style={{color:'var(--accent)',fontWeight:700}}>{acc.name}</span>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{color:'var(--muted)'}}>📅 Mês de referência</label>
+                  <div className="flex gap-2">
+                    <select value={reajusteMonth} onChange={e=>setReajusteMonth(Number(e.target.value))}
+                      style={{flex:1,background:'var(--bg3)',border:'1.5px solid var(--border)',borderRadius:9,padding:'10px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                      {MONTHS.map((m,i)=><option key={i} value={i}>{m}</option>)}
+                    </select>
+                    <select value={reajusteYear} onChange={e=>setReajusteYear(Number(e.target.value))}
+                      style={{width:90,background:'var(--bg3)',border:'1.5px solid var(--border)',borderRadius:9,padding:'10px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                      {[curYear-2,curYear-1,curYear,curYear+1].map(y=><option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{color:'var(--muted)'}}>Descrição</label>
+                  <input value={reajusteDesc} onChange={e=>setReajusteDesc(e.target.value)}
+                    style={{width:'100%',background:'var(--bg3)',border:'1.5px solid var(--border)',borderRadius:'9px',padding:'10px 12px',fontFamily:'Sora,sans-serif',fontSize:'13px',color:'var(--text)',outline:'none'}} />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{color:'var(--muted)'}}>
+                    Valor do ajuste (R$) — positivo para entrada, negativo para saída
+                  </label>
+                  <input type="number" value={reajusteVal} onChange={e=>setReajusteVal(e.target.value)}
+                    placeholder="Ex: -3171.25 ou 500"
+                    style={{width:'100%',background:'var(--bg3)',border:'1.5px solid var(--border)',borderRadius:'9px',padding:'10px 12px',fontFamily:'Sora,sans-serif',fontSize:'13px',color:'var(--text)',outline:'none'}} />
+                </div>
+
+                <div className="rounded-xl p-3" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span style={{color:'var(--muted)'}}>Saldo atual</span>
+                    <span className="font-mono font-bold" style={{color:'var(--blue)'}}>R$ {fmt(balAtual)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span style={{color:'var(--muted)'}}>Ajuste</span>
+                    <span className="font-mono font-bold" style={{color: isNaN(raw)||raw===0?'var(--muted)':raw>0?'var(--green)':'var(--red)'}}>
+                      {isNaN(raw)||raw===0?'—':(raw>0?'+ ':'- ')+'R$ '+fmt(Math.abs(raw))}
+                    </span>
+                  </div>
+                  <div className="h-px my-1" style={{background:'var(--border)'}} />
+                  <div className="flex justify-between">
+                    <span className="text-xs font-bold">Saldo após reajuste</span>
+                    <span className="font-mono font-extrabold text-sm" style={{color:previewBal>=0?'var(--green)':'var(--red)'}}>
+                      R$ {fmt(previewBal)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-5">
+                <button onClick={()=>setShowReajuste(false)}
+                  style={{flex:1,padding:'11px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>
+                  Cancelar
+                </button>
+                <button onClick={doSaveReajuste} disabled={!reajusteVal||isNaN(parseFloat(String(reajusteVal).replace(',','.')))||parseFloat(String(reajusteVal).replace(',','.')===''?'0':String(reajusteVal).replace(',','.'))==0}
+                  style={{flex:2,padding:'11px',background:'linear-gradient(135deg,#f59e0b,#d97706)',border:'none',borderRadius:'9px',color:'#fff',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>
+                  ⚖️ Aplicar Reajuste
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Modal conta */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -409,3 +538,4 @@ export default function Contas({ curMonth, curYear }: Props) {
     </div>
   )
 }
+
