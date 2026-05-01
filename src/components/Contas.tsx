@@ -15,7 +15,7 @@ const COLORS = ['#6366f1','#22c55e','#06b6d4','#f59e0b','#ef4444','#8b5cf6']
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
 export default function Contas({ curMonth, curYear }: Props) {
-  const { db, save, addAccount, updateAccount, deleteAccount, balances } = useDB()
+  const { db, save: saveDB, addAccount, updateAccount, deleteAccount, balances } = useDB()
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState<string|null>(null)
   const [name, setName] = useState('')
@@ -101,7 +101,7 @@ export default function Contas({ curMonth, curYear }: Props) {
       invoiceMonth: null,
       invoiceYear: null,
     }
-    save({ ...db, transactions: [tx, ...db.transactions] })
+    saveDB({ ...db, transactions: [tx, ...db.transactions] })
     setShowReajuste(false)
     setReajusteVal('')
   }
