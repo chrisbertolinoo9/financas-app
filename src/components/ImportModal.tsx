@@ -23,6 +23,8 @@ TRANSFERENCIAS (type="transferencia") — NÃO são receita nem despesa:
 
 RECEITAS (type="receita"):
 - "CAIXA ECONOMICA FEDERAL" entrada → receita, cat="Renda Extra", icon="💰" (FGTS aniversário)
+- "Crédito" ou "Saldo" em extrato da Swile/VR/Vale → receita, cat="Benefício", icon="🎁"
+- Qualquer crédito de benefício alimentação/refeição → receita, cat="Benefício", icon="🎁"
 - Pix recebido do Santander com nome CHRISTIAN BERTOLINO → receita, cat="Salário", icon="💼"
 - "CLAUDETE" ou nome de familiar → receita, cat="Renda Extra", icon="💰"
 - Rendimentos, cashback, estorno → receita, cat="Renda Extra"
