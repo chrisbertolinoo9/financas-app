@@ -14,21 +14,21 @@ import type { DB, Transaction, Account, Card, PlanGoal } from '../types'
 //   - se veio como "entrada" no extrato → soma (ex: Nubank recebeu da Dai)
 //   - se veio como "saida" no extrato → subtrai (ex: Nubank enviou para 99)
 //
-// O campo transferDir='in'|'out' resolve a ambiguidade.
-// Se transferDir nao existe, fallback: toAccId=null → entrada, toAccId!=null → saida.
+// transferDir='in' soma, 'out' subtrai.
+// Transferencias sem transferDir sao ignoradas no calculo (nao afetam saldo).
+// Apenas transferencias criadas manualmente com toAccId afetam os dois lados.
 export function computeBalance(accId: string, initialBalance: number, transactions: Transaction[]): number {
   return transactions
     .filter(t => t.accId === accId)
     .reduce((sum, t) => {
       if (t.type === 'receita') return sum + t.val
       if (t.type === 'despesa') return sum - t.val
-      // transferencia
+      // transferencia: so conta se tiver transferDir explicito
       const dir = (t as Transaction & { transferDir?: string }).transferDir
       if (dir === 'in')  return sum + t.val
       if (dir === 'out') return sum - t.val
-      // fallback para registros sem transferDir
-      if (t.toAccId) return sum - t.val  // tem destino definido → saiu daqui
-      return sum + t.val                  // sem destino → entrou aqui
+      // sem transferDir → ignora (nao afeta saldo)
+      return sum
     }, initialBalance)
 }
 
