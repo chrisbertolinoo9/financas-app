@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from './AuthContext'
 import { loadLocal, loadCloud, saveLocal, saveCloud, emptyDB } from '../lib/db'
 import type { DB, Transaction, Account, Card, PlanGoal } from '../types'
@@ -24,14 +24,13 @@ const DBContext = createContext<DBContextType>({} as DBContextType)
 
 export function DBProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  const [db, setDB] = useState<DB>({ ...emptyDB })
+  const [db, setDB] = useState<DB>(() => loadLocal())
   const [ready, setReady] = useState(false)
-  const [syncTimer, setSyncTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
+  const syncTimer = useRef<ReturnType<typeof setTimeout>|null>(null)
 
   useEffect(() => {
-    const local = loadLocal()
-    setDB(local)
     if (user) {
+      // Load from cloud and override local
       loadCloud(user.uid).then(cloud => {
         if (cloud) {
           setDB(cloud)
@@ -40,6 +39,7 @@ export function DBProvider({ children }: { children: React.ReactNode }) {
         setReady(true)
       })
     } else {
+      setDB(loadLocal())
       setReady(true)
     }
   }, [user])
@@ -48,30 +48,26 @@ export function DBProvider({ children }: { children: React.ReactNode }) {
     setDB(newDB)
     saveLocal(newDB)
     if (user) {
-      if (syncTimer) clearTimeout(syncTimer)
-      const t = setTimeout(() => saveCloud(user.uid, newDB), 2000)
-      setSyncTimer(t)
+      if (syncTimer.current) clearTimeout(syncTimer.current)
+      syncTimer.current = setTimeout(() => saveCloud(user.uid, newDB), 2000)
     }
-  }, [user, syncTimer])
+  }, [user])
 
-  const addTransaction = (t: Transaction) => save({ ...db, transactions: [t, ...db.transactions] })
-  const updateTransaction = (t: Transaction) => save({ ...db, transactions: db.transactions.map(x => x.id === t.id ? t : x) })
-  const deleteTransaction = (id: string) => save({ ...db, transactions: db.transactions.filter(x => x.id !== id) })
-
-  const addAccount = (a: Account) => save({ ...db, accounts: [...db.accounts, a] })
-  const updateAccount = (a: Account) => save({ ...db, accounts: db.accounts.map(x => x.id === a.id ? a : x) })
-  const deleteAccount = (id: string) => save({ ...db, accounts: db.accounts.filter(x => x.id !== id), transactions: db.transactions.filter(x => x.accId !== id) })
-
-  const addCard = (c: Card) => save({ ...db, cards: [...db.cards, c] })
-  const updateCard = (c: Card) => save({ ...db, cards: db.cards.map(x => x.id === c.id ? c : x) })
-  const deleteCard = (id: string) => save({ ...db, cards: db.cards.filter(x => x.id !== id), transactions: db.transactions.filter(x => x.cardId !== id) })
-
-  const upsertPlanGoal = (g: PlanGoal) => {
-    const exists = db.planGoals.findIndex(x => x.cat === g.cat)
-    const goals = exists >= 0 ? db.planGoals.map(x => x.cat === g.cat ? g : x) : [...db.planGoals, g]
+  const addTransaction    = (t: Transaction) => save({ ...db, transactions: [t, ...db.transactions] })
+  const updateTransaction = (t: Transaction) => save({ ...db, transactions: db.transactions.map(x => x.id===t.id ? t : x) })
+  const deleteTransaction = (id: string)     => save({ ...db, transactions: db.transactions.filter(x => x.id!==id) })
+  const addAccount        = (a: Account)     => save({ ...db, accounts: [...db.accounts, a] })
+  const updateAccount     = (a: Account)     => save({ ...db, accounts: db.accounts.map(x => x.id===a.id ? a : x) })
+  const deleteAccount     = (id: string)     => save({ ...db, accounts: db.accounts.filter(x => x.id!==id), transactions: db.transactions.filter(x => x.accId!==id) })
+  const addCard           = (c: Card)        => save({ ...db, cards: [...db.cards, c] })
+  const updateCard        = (c: Card)        => save({ ...db, cards: db.cards.map(x => x.id===c.id ? c : x) })
+  const deleteCard        = (id: string)     => save({ ...db, cards: db.cards.filter(x => x.id!==id), transactions: db.transactions.filter(x => x.cardId!==id) })
+  const upsertPlanGoal    = (g: PlanGoal)    => {
+    const goals = db.planGoals.findIndex(x => x.cat===g.cat) >= 0
+      ? db.planGoals.map(x => x.cat===g.cat ? g : x)
+      : [...db.planGoals, g]
     save({ ...db, planGoals: goals })
   }
-
   const clearAll = () => save({ ...emptyDB })
 
   return (
@@ -81,6 +77,4 @@ export function DBProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function useDB() {
-  return useContext(DBContext)
-}
+export function useDB() { return useContext(DBContext) }
