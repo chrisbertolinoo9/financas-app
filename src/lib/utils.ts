@@ -64,3 +64,12 @@ export function upToMonth(dateISO: string, month: number, year: number): boolean
   if (d.getFullYear() === year && d.getMonth() <= month) return true
   return false
 }
+
+// Retorna true se a transação ocorreu DEPOIS do fim do mês/ano
+export function afterMonth(dateISO: string, month: number, year: number): boolean {
+  if (!dateISO) return false
+  const d = new Date(dateISO + 'T12:00:00')
+  if (d.getFullYear() > year) return true
+  if (d.getFullYear() === year && d.getMonth() > month) return true
+  return false
+}
