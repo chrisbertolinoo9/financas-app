@@ -54,7 +54,6 @@ export default function Dashboard({ curMonth, curYear }: Props) {
     [db.transactions, curMonth, curYear]
   )
 
-  // Transferencias nao entram nos KPIs de receita/despesa
   const rec  = useMemo(() => txs.filter(t => t.type === 'receita').reduce((s, t) => s + t.val, 0), [txs])
   const desp = useMemo(() => txs.filter(t => t.type === 'despesa').reduce((s, t) => s + t.val, 0), [txs])
   const saldo = useMemo(() => db.accounts.filter(a => !a.archived).reduce((s, a) => s + a.balance, 0), [db.accounts])
@@ -90,8 +89,9 @@ export default function Dashboard({ curMonth, curYear }: Props) {
   const arcs = catTotals.slice(0, 6).map((e, i) => {
     const pct = e[1] / totalDesp
     const dash = pct * circ
+    const dashArray = dash.toString() + ' ' + circ.toString()
     const arc = <circle key={i} cx="55" cy="55" r={r} fill="none" stroke={COLORS[i]}
-      strokeWidth="14" strokeDasharray={}
+      strokeWidth="14" strokeDasharray={dashArray}
       strokeDashoffset={-offset} transform="rotate(-90 55 55)" />
     offset += dash
     return arc
