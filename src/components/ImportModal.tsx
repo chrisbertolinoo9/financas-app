@@ -250,8 +250,52 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
       patchedExisting.has(t.id) ? patchedExisting.get(t.id)! : t
     )
 
-    save({ ...db, transactions: [...newTxs, ...updatedExisting] })
-    setImported(toImp.length); setStep(4)
+    // Gera parcelas futuras automaticamente para transacoes com padrao "Parcela X/N"
+    const futureParcelas: Transaction[] = []
+    newTxs.forEach(t => {
+      if (t.type !== 'despesa') return
+      // Detecta padrao "Parcela X/N" ou "- Parcela X/6" no nome
+      const match = t.name.match(/[Pp]arcela\s+(\d+)\/(\d+)/)
+      if (!match) return
+      const current_p = parseInt(match[1])
+      const total_p   = parseInt(match[2])
+      if (current_p >= total_p) return // ultima parcela, nada a criar
+      const remaining = total_p - current_p
+      // Mes base para as proximas parcelas
+      const baseMonth = t.invoiceMonth !== null && t.invoiceMonth !== undefined ? t.invoiceMonth : refMonth
+      const baseYear  = t.invoiceYear  !== null && t.invoiceYear  !== undefined ? t.invoiceYear  : refYear
+      for (let i = 1; i <= remaining; i++) {
+        let futM = baseMonth + i
+        let futY = baseYear
+        while (futM > 11) { futM -= 12; futY++ }
+        // Nome com parcela atualizada
+        const futureName = t.name.replace(
+          /[Pp]arcela\s+\d+\/\d+/,
+          'Parcela ' + (current_p + i) + '/' + total_p
+        )
+        // Data ISO no primeiro dia do mes da fatura futura
+        const futDateISO = futY + '-' + String(futM + 1).padStart(2,'0') + '-01'
+        futureParcelas.push({
+          id: genId(),
+          name: futureName,
+          cat: t.cat,
+          type: 'despesa',
+          val: t.val,
+          dateISO: futDateISO,
+          date: '01/' + String(futM + 1).padStart(2,'0'),
+          icon: t.icon,
+          color: t.color,
+          accId: null,
+          cardId: t.cardId,
+          toAccId: null,
+          invoiceMonth: futM,
+          invoiceYear: futY,
+        })
+      }
+    })
+
+    save({ ...db, transactions: [...newTxs, ...futureParcelas, ...updatedExisting] })
+    setImported(toImp.length + futureParcelas.length); setStep(4)
   }
 
   const transferCount = pending.filter(r => r._sel && r.type === 'transferencia').length
