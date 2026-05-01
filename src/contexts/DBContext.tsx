@@ -4,12 +4,33 @@ import { loadLocal, loadCloud, saveLocal, saveCloud, emptyDB } from '../lib/db'
 import { genId, isoToDisplay, C_ICON, C_COLOR } from '../lib/utils'
 import type { DB, Transaction, Account, Card, PlanGoal } from '../types'
 
-// Calcula saldo dinamico de uma conta: initialBalance + receitas - despesas
-// Transferencias nao afetam o saldo (sao movimentacoes entre contas proprias)
+// Calcula saldo dinamico de uma conta:
+// initialBalance + receitas + transferencias recebidas - despesas - transferencias enviadas
 export function computeBalance(accId: string, initialBalance: number, transactions: Transaction[]): number {
   return transactions
-    .filter(t => t.accId === accId && t.type !== 'transferencia')
-    .reduce((sum, t) => t.type === 'receita' ? sum + t.val : sum - t.val, initialBalance)
+    .filter(t => t.accId === accId)
+    .reduce((sum, t) => {
+      if (t.type === 'receita') return sum + t.val
+      if (t.type === 'despesa') return sum - t.val
+      // transferencia: se toAccId aponta para outra conta, saiu daqui → subtrai
+      // se accId === esta conta e veio de outra (toAccId é a origem), entrou aqui → soma
+      // A logica e: o registro com accId=esta_conta sempre representa o lado desta conta
+      // Quando a Dai manda para o Nubank:
+      //   - registro 1: accId=Dai, toAccId=Nubank → saída da Dai
+      //   - registro 2: accId=Nubank, toAccId=Dai → entrada no Nubank
+      // Precisamos saber se este registro e a saida ou a entrada
+      // Se toAccId existe e e diferente: verificamos se ha outro registro espelho
+      // Simplificacao: transferencia com accId=esta_conta e toAccId=outra → SAIDA
+      // transferencia com accId=esta_conta e toAccId=outra onde o par espelho existe → ENTRADA
+      // Na importacao do extrato Nubank, transferencias recebidas tem accId=Nubank e sao entradas
+      // transferencias enviadas tem accId=Nubank e sao saidas
+      // Para diferenciar: usamos o campo que a IA ja classifica como entrada/saida
+      // Mas como o type e sempre 'transferencia', usamos toAccId:
+      // se toAccId != null → saiu desta conta para outra → SUBTRAI
+      // se toAccId == null → chegou de fora (importada como entrada) → SOMA
+      if (t.toAccId) return sum - t.val  // saida: enviou para outra conta
+      return sum + t.val                  // entrada: recebeu de outra conta
+    }, initialBalance)
 }
 
 interface DBContextType {
