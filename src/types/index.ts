@@ -2,7 +2,7 @@ export interface Transaction {
   id: string
   name: string
   cat: string
-  type: 'receita' | 'despesa'
+  type: 'receita' | 'despesa' | 'transferencia'
   val: number
   date: string
   dateISO: string
@@ -10,6 +10,7 @@ export interface Transaction {
   color: string
   accId: string | null
   cardId: string | null
+  toAccId?: string | null
   parcelado?: boolean
   totalParcelas?: number | null
   parcelaAtual?: number | null
