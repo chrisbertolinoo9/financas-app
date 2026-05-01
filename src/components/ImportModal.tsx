@@ -45,7 +45,7 @@ CATEGORIAS disponíveis: Alimentação, Supermercado, Moradia, Transporte, Saúd
 
 IMPORTANTE:
 - Valores numéricos puros sem R$ ou pontos de milhar (ex: 1234.56)
-- Descrição curta e legível (máximo 40 caracteres)
+- Descrição: use o nome EXATO como aparece no extrato, sem traduzir ou resumir (máximo 50 caracteres)
 - Para transferencias, adicione o campo "dir":"in" se o dinheiro ENTROU na conta ou "dir":"out" se SAIU
 - Se não houver transações retorne transactions:[]
 - Inclua TODAS as transações, inclusive transferências`
