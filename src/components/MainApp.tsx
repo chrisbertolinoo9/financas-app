@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { DBProvider } from '../contexts/DBContext'
 import Sidebar from './Sidebar'
 import MobileNav from './MobileNav'
@@ -9,6 +9,7 @@ import Transacoes from './Transacoes'
 import Cartoes from './Cartoes'
 import Planejamento from './Planejamento'
 import Relatorios from './Relatorios'
+import ImportModal from './ImportModal'
 
 export type View = 'dashboard' | 'contas' | 'transacoes' | 'cartoes' | 'planejamento' | 'relatorios'
 
@@ -21,26 +22,25 @@ const VIEW_TITLES: Record<View, string> = {
   relatorios: 'Relatórios',
 }
 
+const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+
 export default function MainApp() {
   const [view, setView] = useState<View>('dashboard')
   const [curMonth, setCurMonth] = useState(new Date().getMonth())
   const [curYear, setCurYear] = useState(new Date().getFullYear())
-
-  const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+  const [showImport, setShowImport] = useState(false)
 
   const changeMonth = (dir: number) => {
-    let m = curMonth + dir
-    let y = curYear
+    let m = curMonth + dir, y = curYear
     if (m < 0) { m = 11; y-- }
     if (m > 11) { m = 0; y++ }
-    setCurMonth(m)
-    setCurYear(y)
+    setCurMonth(m); setCurYear(y)
   }
 
   return (
     <DBProvider>
       <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
-        <Sidebar view={view} setView={setView} />
+        <Sidebar view={view} setView={setView} onImport={() => setShowImport(true)} />
         <div className="flex flex-col flex-1 overflow-hidden" style={{ marginLeft: 232 }}>
           <Topbar
             title={VIEW_TITLES[view]}
@@ -59,6 +59,13 @@ export default function MainApp() {
         </div>
         <MobileNav view={view} setView={setView} />
       </div>
+      {showImport && (
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          curMonth={curMonth}
+          curYear={curYear}
+        />
+      )}
     </DBProvider>
   )
 }
