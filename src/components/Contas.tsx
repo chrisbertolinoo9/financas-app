@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useDB } from '../contexts/DBContext'
 import { fmt, genId, isoToDisplay, C_COLOR, C_ICON, inMonth } from '../lib/utils'
 import type { Account, Transaction } from '../types'
+import ImportModal from './ImportModal'
 
 interface Props { curMonth: number; curYear: number }
 
@@ -24,6 +25,10 @@ export default function Contas({ curMonth, curYear }: Props) {
   const [delId, setDelId] = useState<string|null>(null)
   const [detailAcc, setDetailAcc] = useState<Account|null>(null)
   const [txTab, setTxTab] = useState<'all'|'month'|'despesa'|'receita'|'transferencia'>('month')
+  const [importAccId, setImportAccId] = useState<string|null>(null)
+  const [importMonth, setImportMonth] = useState(curMonth)
+  const [importYear, setImportYear]   = useState(curYear)
+  const [showImportPicker, setShowImportPicker] = useState(false)
 
   const active   = useMemo(() => db.accounts.filter(a => !a.archived), [db.accounts])
   const archived = useMemo(() => db.accounts.filter(a => a.archived),  [db.accounts])
@@ -53,18 +58,23 @@ export default function Contas({ curMonth, curYear }: Props) {
     setModal(false)
   }
 
-  // Transacoes do drawer
+  function openImportPicker(accId: string) {
+    setImportAccId(accId)
+    setImportMonth(curMonth)
+    setImportYear(curYear)
+    setShowImportPicker(true)
+  }
+
   const accTxs = useMemo(() => {
     if (!detailAcc) return []
     let txs = db.transactions.filter(t => t.accId === detailAcc.id)
-    if (txTab === 'month')        txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear))
-    if (txTab === 'despesa')      txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type === 'despesa')
-    if (txTab === 'receita')      txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type === 'receita')
+    if (txTab === 'month')         txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear))
+    if (txTab === 'despesa')       txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type === 'despesa')
+    if (txTab === 'receita')       txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type === 'receita')
     if (txTab === 'transferencia') txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type === 'transferencia')
     return [...txs].sort((a,b) => b.dateISO.localeCompare(a.dateISO))
   }, [detailAcc, db.transactions, txTab, curMonth, curYear])
 
-  // Receita/despesa do mes — transferencias NAO entram
   const accRecMes  = useMemo(() =>
     detailAcc ? db.transactions.filter(t => t.accId===detailAcc.id && inMonth(t.dateISO,curMonth,curYear) && t.type==='receita').reduce((s,t)=>s+t.val,0) : 0,
     [detailAcc, db.transactions, curMonth, curYear])
@@ -102,13 +112,10 @@ export default function Contas({ curMonth, curYear }: Props) {
         </button>
       </div>
 
-      {/* Total Bar */}
       {active.length > 0 && (
         <div className="rounded-2xl p-4 mb-4 flex items-center flex-wrap gap-3" style={{background:'var(--card)',border:'1px solid var(--border)'}}>
           <div className="flex-1">
-            <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{color:'var(--muted)'}}>
-              Patrimônio Total
-            </div>
+            <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{color:'var(--muted)'}}>Patrimônio Total</div>
             <div className="font-mono text-2xl font-extrabold" style={{color:'var(--blue)'}}>R$ {fmt(total)}</div>
             <div className="text-xs mt-0.5" style={{color:'var(--muted)'}}>{active.length} conta{active.length!==1?'s':''} ativa{active.length!==1?'s':''}</div>
           </div>
@@ -127,7 +134,6 @@ export default function Contas({ curMonth, curYear }: Props) {
         </div>
       )}
 
-      {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         {active.map(a => (
           <div key={a.id} onClick={() => { setDetailAcc(a); setTxTab('month') }}
@@ -163,7 +169,6 @@ export default function Contas({ curMonth, curYear }: Props) {
         </div>
       </div>
 
-      {/* Arquivadas */}
       {archived.length > 0 && (
         <div className="rounded-2xl p-4" style={{background:'var(--card)',border:'1px solid var(--border)'}}>
           <div className="text-xs font-bold uppercase tracking-wide mb-3" style={{color:'var(--muted)'}}>📦 Arquivadas ({archived.length})</div>
@@ -204,20 +209,30 @@ export default function Contas({ curMonth, curYear }: Props) {
               <div className="font-mono text-3xl font-extrabold mb-4" style={{color:detailBal>=0?'var(--green)':'var(--red)'}}>
                 R$ {fmt(detailBal)}
               </div>
+
+              {/* Botoes de acao */}
               <div className="flex gap-2 flex-wrap justify-center">
-                <button onClick={e=>openEdit(detailAcc,e as unknown as React.MouseEvent)} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',color:'var(--muted2)',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
+                {/* Importar Extrato — destaque */}
+                <button onClick={() => openImportPicker(detailAcc.id)}
+                  style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'linear-gradient(135deg,rgba(99,102,241,.18),rgba(6,182,212,.18))',border:'1px solid rgba(99,102,241,.4)',color:'var(--accent)',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
+                  <span style={{fontSize:18}}>📥</span>Importar
+                </button>
+                <button onClick={e=>openEdit(detailAcc,e as unknown as React.MouseEvent)}
+                  style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',color:'var(--muted2)',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
                   <span style={{fontSize:18}}>✏️</span>Editar
                 </button>
-                <button onClick={()=>{setDelId(detailAcc.id);setDetailAcc(null)}} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',color:'var(--muted2)',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
+                <button onClick={()=>{setDelId(detailAcc.id);setDetailAcc(null)}}
+                  style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',color:'var(--muted2)',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
                   <span style={{fontSize:18}}>🗑</span>Excluir
                 </button>
-                <button onClick={()=>setDetailAcc(null)} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',color:'var(--muted2)',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
+                <button onClick={()=>setDetailAcc(null)}
+                  style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'10px 16px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',color:'var(--muted2)',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'Sora,sans-serif',textTransform:'uppercase',letterSpacing:.4,minWidth:72}}>
                   <span style={{fontSize:18}}>✕</span>Fechar
                 </button>
               </div>
             </div>
 
-            {/* Summary do mes — sem transferencias */}
+            {/* Summary do mes */}
             <div className="grid grid-cols-3 gap-2 p-4" style={{borderBottom:'1px solid var(--border)'}}>
               {[
                 {label:'Entradas',value:fmt(accRecMes),color:'var(--green)'},
@@ -261,9 +276,7 @@ export default function Contas({ curMonth, curYear }: Props) {
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold truncate">{t.name}</div>
                         <div className="text-xs" style={{color:'var(--muted)'}}>
-                          {isTransfer
-                            ? (otherAcc ? '→ ' + otherAcc.name : 'Transferência')
-                            : t.cat}
+                          {isTransfer ? (otherAcc ? '→ ' + otherAcc.name : 'Transferência') : t.cat}
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
@@ -284,6 +297,60 @@ export default function Contas({ curMonth, curYear }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal seletor de mes/ano antes de abrir importacao */}
+      {showImportPicker && importAccId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{background:'rgba(0,0,0,.8)',backdropFilter:'blur(8px)'}}
+          onClick={e=>{if(e.target===e.currentTarget)setShowImportPicker(false)}}>
+          <div className="w-full max-w-xs rounded-2xl p-6" style={{background:'var(--card2)',border:'1px solid var(--border)',animation:'mdIn .2s ease'}}>
+            <div className="text-base font-bold mb-1">📥 Importar Extrato</div>
+            <div className="text-xs mb-4" style={{color:'var(--muted)'}}>
+              Conta: <span style={{color:'var(--accent)',fontWeight:700}}>{db.accounts.find(a=>a.id===importAccId)?.name}</span>
+            </div>
+
+            <div className="mb-4">
+              <label className="text-xs font-bold uppercase tracking-wide block mb-2" style={{color:'var(--muted)'}}>
+                📅 Mês de referência
+              </label>
+              <div className="flex gap-2">
+                <select value={importMonth} onChange={e=>setImportMonth(Number(e.target.value))}
+                  style={{flex:1,background:'var(--bg3)',border:'1.5px solid var(--border)',borderRadius:9,padding:'10px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                  {MONTHS.map((m,i)=><option key={i} value={i}>{m}</option>)}
+                </select>
+                <select value={importYear} onChange={e=>setImportYear(Number(e.target.value))}
+                  style={{width:90,background:'var(--bg3)',border:'1.5px solid var(--border)',borderRadius:9,padding:'10px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                  {[curYear-2,curYear-1,curYear,curYear+1].map(y=><option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <div className="text-xs mt-2 px-1" style={{color:'var(--muted)'}}>
+                Transações serão datadas em <span style={{color:'var(--accent)',fontWeight:700}}>{MONTHS[importMonth]} {importYear}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={()=>setShowImportPicker(false)}
+                style={{flex:1,padding:'11px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>
+                Cancelar
+              </button>
+              <button onClick={()=>{ setShowImportPicker(false); setDetailAcc(null) }}
+                style={{flex:2,padding:'11px',background:'linear-gradient(135deg,var(--accent),var(--accent2))',border:'none',borderRadius:'9px',color:'#fff',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>
+                📥 Abrir Importação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ImportModal com conta e mes pre-selecionados */}
+      {!showImportPicker && importAccId && (
+        <ImportModal
+          onClose={()=>setImportAccId(null)}
+          curMonth={importMonth}
+          curYear={importYear}
+          presetAccId={importAccId}
+        />
       )}
 
       {/* Modal conta */}
@@ -328,7 +395,6 @@ export default function Contas({ curMonth, curYear }: Props) {
         </div>
       )}
 
-      {/* Delete */}
       {delId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,.75)',backdropFilter:'blur(8px)'}}>
           <div className="w-full max-w-xs rounded-2xl p-6" style={{background:'var(--card2)',border:'1px solid var(--border)',animation:'mdIn .2s ease'}}>
