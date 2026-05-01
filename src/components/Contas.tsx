@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useDB } from '../contexts/DBContext'
-import { fmt, genId, isoToDisplay, C_COLOR, C_ICON, inMonth, upToMonth } from '../lib/utils'
+import { fmt, genId, isoToDisplay, C_COLOR, C_ICON, inMonth, afterMonth } from '../lib/utils'
 import type { Account, Transaction } from '../types'
 
 interface Props { curMonth: number; curYear: number }
@@ -13,12 +13,18 @@ const ACC_TYPES = [
 const COLORS = ['#6366f1','#22c55e','#06b6d4','#f59e0b','#ef4444','#8b5cf6']
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
-// Calcula saldo da conta ATÉ o fim do mês/ano selecionado
+// Calcula saldo da conta no fim do mês/ano selecionado
+// Lógica: o saldo inicial cadastrado representa o saldo ATUAL (hoje)
+// Para meses passados: revertemos as transações que ocorreram DEPOIS do mês
+// Para meses futuros: adicionamos as transações que ocorrerão
 function balanceUpTo(accId: string, txs: Transaction[], initialBalance: number, month: number, year: number) {
-  const relevant = txs.filter(t => t.accId === accId && upToMonth(t.dateISO, month, year))
-  const rec  = relevant.filter(t => t.type === 'receita').reduce((s,t) => s+t.val, 0)
-  const desp = relevant.filter(t => t.type === 'despesa').reduce((s,t) => s+t.val, 0)
-  return initialBalance + rec - desp
+  // Transações que ocorreram DEPOIS do mês selecionado
+  const future = txs.filter(t => t.accId === accId && afterMonth(t.dateISO, month, year))
+  // Para ir "de volta no tempo": revertemos essas transações futuras
+  const futureRec  = future.filter(t => t.type === 'receita').reduce((s,t) => s+t.val, 0)
+  const futureDesp = future.filter(t => t.type === 'despesa').reduce((s,t) => s+t.val, 0)
+  // Saldo no fim do mês = saldo atual - receitas futuras + despesas futuras
+  return initialBalance - futureRec + futureDesp
 }
 
 export default function Contas({ curMonth, curYear }: Props) {
