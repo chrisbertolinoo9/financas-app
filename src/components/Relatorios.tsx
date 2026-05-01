@@ -34,10 +34,8 @@ export default function Relatorios({ curMonth, curYear }: Props) {
       const catMap: Record<string,number> = {}
       despesas.forEach(t => { catMap[t.cat] = (catMap[t.cat]||0)+t.val })
       const catRanking = Object.entries(catMap).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>`${cat}: R$${val.toFixed(2)}`).join(', ')
-      const topDespesas = despesas.sort((a,b)=>b.val-a.val).slice(0,10).map(t=>`${t.name} (${t.cat}): R$${t.val.toFixed(2)}`).join('
-')
-      const topReceitas = receitas.sort((a,b)=>b.val-a.val).slice(0,5).map(t=>`${t.name}: R$${t.val.toFixed(2)}`).join('
-')
+      const topDespesas = despesas.sort((a,b)=>b.val-a.val).slice(0,10).map(t=>`${t.name} (${t.cat}): R$${t.val.toFixed(2)}`).join(' | ')
+      const topReceitas = receitas.sort((a,b)=>b.val-a.val).slice(0,5).map(t=>`${t.name}: R$${t.val.toFixed(2)}`).join(' | ')
       const taxaPoupanca = rec > 0 ? Math.round((rec-desp)/rec*100) : 0
 
       const prompt = `Você é um consultor financeiro pessoal analisando os dados de ${MONTHS[curMonth]} ${curYear}.
