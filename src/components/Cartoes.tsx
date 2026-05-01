@@ -12,7 +12,7 @@ const CARD_COLORS = ['#8b5cf6','#6366f1','#3b82f6','#06b6d4','#22c55e','#f59e0b'
 const CATS = ['Alimentação','Moradia','Transporte','Saúde','Lazer','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Outros']
 
 export default function Cartoes({ curMonth, curYear }: Props) {
-  const { db, addCard, updateCard, deleteCard, addTransaction, deleteTransaction } = useDB()
+  const { db, addCard, updateCard, deleteCard, addTransaction, updateTransaction, deleteTransaction } = useDB()
   const [cardModal, setCardModal] = useState(false)
   const [editCardId, setEditCardId] = useState<string|null>(null)
   const [cName, setCName] = useState('')
@@ -29,6 +29,12 @@ export default function Cartoes({ curMonth, curYear }: Props) {
   const [txDate, setTxDate] = useState(todayISO())
   const [txCat, setTxCat] = useState('Outros')
   const [delTxId, setDelTxId] = useState<string|null>(null)
+  const [editTxId, setEditTxId] = useState<string|null>(null)
+  const [editCat, setEditCat] = useState('')
+  const [editName, setEditName] = useState('')
+  const [customCats] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('fp_custom_import_cats') || '[]') } catch { return [] }
+  })
   const [importCardId, setImportCardId] = useState<string|null>(null)
   const [importMonth, setImportMonth] = useState(curMonth)
   const [importYear, setImportYear] = useState(curYear)
@@ -209,19 +215,53 @@ export default function Cartoes({ curMonth, curYear }: Props) {
             </div>
             <div className="flex flex-col gap-0.5">
               {invTxs.length ? invTxs.map(t=>(
-                <div key={t.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg group relative"
-                  onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='var(--bg3)'}
-                  onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
-                    style={{background:(C_COLOR[t.cat]||'#6b7591')+'22'}}>{t.icon||'💰'}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold truncate">{t.name}</div>
-                    <div className="text-xs" style={{color:'var(--muted)'}}>{t.cat} · {isoToDisplay(t.dateISO)}</div>
-                  </div>
-                  <div className="font-mono text-xs font-bold group-hover:opacity-0" style={{color:'var(--red)'}}>- R$ {fmt(t.val)}</div>
-                  <div className="absolute right-2 hidden group-hover:flex gap-1" style={{background:'var(--bg3)',borderRadius:7,padding:3}}>
-                    <button onClick={()=>setDelTxId(t.id)} style={{background:'rgba(239,68,68,.12)',border:'none',borderRadius:5,color:'var(--red)',cursor:'pointer',fontSize:11,padding:'3px 7px'}}>🗑</button>
-                  </div>
+                <div key={t.id}>
+                  {editTxId === t.id ? (
+                    /* Modo edição inline */
+                    <div className="rounded-lg px-2.5 py-2.5 flex flex-col gap-2" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
+                      <div className="flex gap-2">
+                        <input value={editName} onChange={e=>setEditName(e.target.value)}
+                          style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'5px 8px',fontFamily:'Sora,sans-serif',fontSize:11,color:'var(--text)',outline:'none'}} />
+                        <select value={editCat} onChange={e=>setEditCat(e.target.value)}
+                          style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'5px 8px',fontFamily:'Sora,sans-serif',fontSize:11,color:'var(--text)',outline:'none',cursor:'pointer'}}>
+                          {[...CATS,...customCats].map(c=><option key={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex gap-1.5 justify-end">
+                        <button onClick={()=>setEditTxId(null)}
+                          style={{padding:'4px 12px',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:11,cursor:'pointer'}}>
+                          Cancelar
+                        </button>
+                        <button onClick={()=>{
+                          updateTransaction({...t, name:editName, cat:editCat, icon:C_ICON[editCat]||t.icon, color:C_COLOR[editCat]||t.color})
+                          setEditTxId(null)
+                        }}
+                          style={{padding:'4px 12px',background:'var(--accent)',border:'none',borderRadius:6,color:'#fff',fontFamily:'Sora,sans-serif',fontSize:11,fontWeight:700,cursor:'pointer'}}>
+                          Salvar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Modo visualização */
+                    <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg group relative cursor-pointer"
+                      onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='var(--bg3)'}
+                      onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}
+                      onClick={()=>{setEditTxId(t.id);setEditCat(t.cat);setEditName(t.name)}}>
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
+                        style={{background:(C_COLOR[t.cat]||'#6b7591')+'22'}}>{t.icon||'💰'}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold truncate">{t.name}</div>
+                        <div className="text-xs" style={{color:'var(--muted)'}}>{t.cat} · {isoToDisplay(t.dateISO)}</div>
+                      </div>
+                      <div className="font-mono text-xs font-bold group-hover:opacity-0" style={{color:'var(--red)'}}>- R$ {fmt(t.val)}</div>
+                      <div className="absolute right-2 hidden group-hover:flex gap-1" style={{background:'var(--bg3)',borderRadius:7,padding:3}}>
+                        <button onClick={e=>{e.stopPropagation();setEditTxId(t.id);setEditCat(t.cat);setEditName(t.name)}}
+                          style={{background:'rgba(99,102,241,.12)',border:'none',borderRadius:5,color:'var(--accent)',cursor:'pointer',fontSize:11,padding:'3px 7px'}}>✏️</button>
+                        <button onClick={e=>{e.stopPropagation();setDelTxId(t.id)}}
+                          style={{background:'rgba(239,68,68,.12)',border:'none',borderRadius:5,color:'var(--red)',cursor:'pointer',fontSize:11,padding:'3px 7px'}}>🗑</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )) : (
                 <div className="text-center py-6 text-xs" style={{color:'var(--muted)'}}>Nenhum lançamento neste mês</div>
