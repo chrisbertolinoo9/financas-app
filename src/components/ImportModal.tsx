@@ -35,9 +35,16 @@ DESPESAS (type="despesa"):
 - "TELEFONICA" ou "VIVO" ou "CLARO" ou "TIM" → despesa, cat="Assinatura", icon="📱"
 - "MARCIO POPILARZ" → despesa, cat="Supermercado", icon="🛒"
 - "PJBANK" → despesa, cat="Moradia", icon="🏠" (aluguel)
+- "COPEL" ou "COPEL-DIS" → despesa, cat="Moradia", icon="🏠" (energia elétrica)
+- "VITORIA REGIA IMOBILIARIA" → despesa, cat="Moradia", icon="🏠" (imóvel)
+- "AKIRA SANTOS" → despesa, cat="Moradia", icon="🏠" (imóvel)
+- "SERVICO DISTRITAL" ou "FORO" ou "COMARCA" → despesa, cat="Moradia", icon="🏠" (cartório)
 - "Even3" ou eventos de airsoft → despesa, cat="Airsoft", icon="🎯"
+- "IFOOD" ou "IFOOD.COM" → despesa, cat="Alimentação", icon="🍽️"
 - iFood, restaurantes, lanchonetes → despesa, cat="Alimentação", icon="🍽️"
 - Supermercados, mercearias, açougues → despesa, cat="Supermercado", icon="🛒"
+- Barbearia, salão, estética → despesa, cat="Lazer", icon="✂️"
+- Shows, eventos, entretenimento, festas → despesa, cat="Lazer", icon="🎉"
 - Pagamento de boleto para empresas → despesa, cat="Outros"
 - Demais compras e serviços → despesa com categoria adequada
 
