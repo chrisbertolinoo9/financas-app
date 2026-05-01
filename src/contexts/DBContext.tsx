@@ -1,35 +1,34 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuth } from './AuthContext'
 import { loadLocal, loadCloud, saveLocal, saveCloud, emptyDB } from '../lib/db'
-import { genId, isoToDisplay, C_ICON, C_COLOR } from '../lib/utils'
+import { genId, isoToDisplay } from '../lib/utils'
 import type { DB, Transaction, Account, Card, PlanGoal } from '../types'
 
-// Calcula saldo dinamico de uma conta:
-// initialBalance + receitas + transferencias recebidas - despesas - transferencias enviadas
+// Calcula saldo dinamico de uma conta.
+//
+// Cada transferencia gera 2 registros no DB:
+//   - lado SAIDA: accId=origem, toAccId=destino  → subtrai do saldo da origem
+//   - lado ENTRADA: accId=destino, toAccId=origem → soma no saldo do destino
+//
+// Quando ainda nao vinculada (toAccId=null), o extrato bancario ja diz:
+//   - se veio como "entrada" no extrato → soma (ex: Nubank recebeu da Dai)
+//   - se veio como "saida" no extrato → subtrai (ex: Nubank enviou para 99)
+//
+// O campo transferDir='in'|'out' resolve a ambiguidade.
+// Se transferDir nao existe, fallback: toAccId=null → entrada, toAccId!=null → saida.
 export function computeBalance(accId: string, initialBalance: number, transactions: Transaction[]): number {
   return transactions
     .filter(t => t.accId === accId)
     .reduce((sum, t) => {
       if (t.type === 'receita') return sum + t.val
       if (t.type === 'despesa') return sum - t.val
-      // transferencia: se toAccId aponta para outra conta, saiu daqui → subtrai
-      // se accId === esta conta e veio de outra (toAccId é a origem), entrou aqui → soma
-      // A logica e: o registro com accId=esta_conta sempre representa o lado desta conta
-      // Quando a Dai manda para o Nubank:
-      //   - registro 1: accId=Dai, toAccId=Nubank → saída da Dai
-      //   - registro 2: accId=Nubank, toAccId=Dai → entrada no Nubank
-      // Precisamos saber se este registro e a saida ou a entrada
-      // Se toAccId existe e e diferente: verificamos se ha outro registro espelho
-      // Simplificacao: transferencia com accId=esta_conta e toAccId=outra → SAIDA
-      // transferencia com accId=esta_conta e toAccId=outra onde o par espelho existe → ENTRADA
-      // Na importacao do extrato Nubank, transferencias recebidas tem accId=Nubank e sao entradas
-      // transferencias enviadas tem accId=Nubank e sao saidas
-      // Para diferenciar: usamos o campo que a IA ja classifica como entrada/saida
-      // Mas como o type e sempre 'transferencia', usamos toAccId:
-      // se toAccId != null → saiu desta conta para outra → SUBTRAI
-      // se toAccId == null → chegou de fora (importada como entrada) → SOMA
-      if (t.toAccId) return sum - t.val  // saida: enviou para outra conta
-      return sum + t.val                  // entrada: recebeu de outra conta
+      // transferencia
+      const dir = (t as Transaction & { transferDir?: string }).transferDir
+      if (dir === 'in')  return sum + t.val
+      if (dir === 'out') return sum - t.val
+      // fallback para registros sem transferDir
+      if (t.toAccId) return sum - t.val  // tem destino definido → saiu daqui
+      return sum + t.val                  // sem destino → entrou aqui
     }, initialBalance)
 }
 
@@ -49,7 +48,6 @@ interface DBContextType {
   deleteCard: (id: string) => void
   upsertPlanGoal: (g: PlanGoal) => void
   clearAll: () => void
-  // Mapa de saldos dinamicos calculados: accId -> balance
   balances: Record<string, number>
 }
 
@@ -85,7 +83,6 @@ export function DBProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user])
 
-  // Saldos dinamicos — recalculados sempre que transacoes ou contas mudam
   const balances = useMemo(() => {
     const map: Record<string, number> = {}
     db.accounts.forEach(a => {
@@ -105,12 +102,14 @@ export function DBProvider({ children }: { children: React.ReactNode }) {
       type: 'transferencia', val, dateISO: date,
       date: isoToDisplay(date), icon: '⇄',
       color: '#6b7591', accId: fromAccId, cardId: null, toAccId,
+      ...(({ transferDir: 'out' }) as object),
     }
     const entrada: Transaction = {
       id: genId(), name: label, cat: 'Transferência',
       type: 'transferencia', val, dateISO: date,
       date: isoToDisplay(date), icon: '⇄',
       color: '#6b7591', accId: toAccId, cardId: null, toAccId: fromAccId,
+      ...(({ transferDir: 'in' }) as object),
     }
     save({ ...db, transactions: [saida, entrada, ...db.transactions] })
   }
