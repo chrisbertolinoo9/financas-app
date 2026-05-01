@@ -464,9 +464,12 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
               const acc = db.accounts.find(a => a.id === destId)
               if (!acc) return null
               const saldoAtual = balances[destId] ?? 0
-              const entradas = pending.filter(r => r._sel && r.type === 'receita').reduce((s,r) => s+r.val, 0)
-              const saidas   = pending.filter(r => r._sel && r.type === 'despesa').reduce((s,r) => s+r.val, 0)
-              const saldoFinal = saldoAtual + entradas - saidas
+              const entradas    = pending.filter(r => r._sel && r.type === 'receita').reduce((s,r) => s+r.val, 0)
+              const saidas      = pending.filter(r => r._sel && r.type === 'despesa').reduce((s,r) => s+r.val, 0)
+              // Transferencias tambem afetam o saldo: in=soma, out=subtrai
+              const transfIn  = pending.filter(r => r._sel && r.type === 'transferencia' && (r.dir === 'in'  || !r.dir)).reduce((s,r) => s+r.val, 0)
+              const transfOut = pending.filter(r => r._sel && r.type === 'transferencia' && r.dir === 'out').reduce((s,r) => s+r.val, 0)
+              const saldoFinal = saldoAtual + entradas - saidas + transfIn - transfOut
               return (
                 <div className="rounded-xl p-4 mb-4" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
                   <div className="text-xs font-bold uppercase tracking-wide mb-3" style={{color:'var(--muted)'}}>
@@ -479,14 +482,26 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
                     </div>
                     {entradas > 0 && (
                       <div className="flex justify-between text-xs">
-                        <span style={{color:'var(--muted)'}}>+ Receitas a importar</span>
+                        <span style={{color:'var(--muted)'}}>+ Receitas</span>
                         <span className="font-mono font-bold" style={{color:'var(--green)'}}>+ R$ {entradas.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
                       </div>
                     )}
                     {saidas > 0 && (
                       <div className="flex justify-between text-xs">
-                        <span style={{color:'var(--muted)'}}>- Despesas a importar</span>
+                        <span style={{color:'var(--muted)'}}>- Despesas</span>
                         <span className="font-mono font-bold" style={{color:'var(--red)'}}>- R$ {saidas.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+                      </div>
+                    )}
+                    {transfIn > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span style={{color:'var(--muted)'}}>+ Transf. recebidas</span>
+                        <span className="font-mono font-bold" style={{color:'var(--green)'}}>+ R$ {transfIn.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+                      </div>
+                    )}
+                    {transfOut > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span style={{color:'var(--muted)'}}>- Transf. enviadas</span>
+                        <span className="font-mono font-bold" style={{color:'var(--red)'}}>- R$ {transfOut.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
                       </div>
                     )}
                     <div className="h-px mt-1" style={{background:'var(--border)'}} />
