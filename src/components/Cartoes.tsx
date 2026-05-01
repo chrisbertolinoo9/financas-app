@@ -287,7 +287,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
                       </div>
                       <div className="font-mono text-xs font-bold group-hover:opacity-0" style={{color:'var(--red)'}}>- R$ {fmt(t.val)}</div>
                       <div className="absolute right-2 hidden group-hover:flex gap-1" style={{background:'var(--bg3)',borderRadius:7,padding:3}}>
-                        <button onClick={e=>{e.stopPropagation();setEditTxId(t.id);setEditCat(t.cat);setEditName(t.name)}}
+                        <button onClick={e=>{e.stopPropagation();setEditTxId(t.id);setEditCat(t.cat);setEditName(t.name);setEditType(t.type==='receita'?'receita':'despesa')}}
                           style={{background:'rgba(99,102,241,.12)',border:'none',borderRadius:5,color:'var(--accent)',cursor:'pointer',fontSize:11,padding:'3px 7px'}}>✏️</button>
                         <button onClick={e=>{e.stopPropagation();setDelTxId(t.id)}}
                           style={{background:'rgba(239,68,68,.12)',border:'none',borderRadius:5,color:'var(--red)',cursor:'pointer',fontSize:11,padding:'3px 7px'}}>🗑</button>
