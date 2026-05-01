@@ -15,7 +15,7 @@ const COLORS = ['#6366f1','#22c55e','#06b6d4','#f59e0b','#ef4444','#8b5cf6']
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
 export default function Contas({ curMonth, curYear }: Props) {
-  const { db, addAccount, updateAccount, deleteAccount } = useDB()
+  const { db, addAccount, updateAccount, deleteAccount, balances } = useDB()
   const [modal, setModal] = useState(false)
   const [editId, setEditId] = useState<string|null>(null)
   const [name, setName] = useState('')
@@ -33,11 +33,10 @@ export default function Contas({ curMonth, curYear }: Props) {
   const active   = useMemo(() => db.accounts.filter(a => !a.archived), [db.accounts])
   const archived = useMemo(() => db.accounts.filter(a => a.archived),  [db.accounts])
 
-  const balances = useMemo(() =>
-    Object.fromEntries(active.map(a => [a.id, a.balance])),
-    [active]
+  const total = useMemo(() =>
+    active.reduce((s, a) => s + (balances[a.id] ?? 0), 0),
+    [active, balances]
   )
-  const total = useMemo(() => Object.values(balances).reduce((s,v) => s+v, 0), [balances])
 
   const inputStyle = { width:'100%', background:'var(--bg3)', border:'1.5px solid var(--border)', borderRadius:'9px', padding:'10px 12px', fontFamily:'Sora,sans-serif', fontSize:'13px', color:'var(--text)', outline:'none' }
 
