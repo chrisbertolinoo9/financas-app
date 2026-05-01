@@ -284,17 +284,21 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
             <div className="text-xs mt-0.5" style={{color:'var(--muted)'}}>
               {presetLabel ? presetLabel + ' · ' + MONTHS[refMonth] + ' ' + refYear : 'Print, imagem ou PDF — a IA extrai e você revisa'}
             </div>
-            {presetCard && (
-              <div className="flex items-center gap-3 mt-2 px-3 py-1.5 rounded-lg" style={{background:'rgba(139,92,246,.08)',border:'1px solid rgba(139,92,246,.2)',display:'inline-flex'}}>
-                <span className="text-xs" style={{color:'var(--muted)'}}>
-                  Vence dia <span style={{color:'var(--purple)',fontWeight:700}}>{presetCard.due}</span>
-                </span>
-                <span style={{color:'var(--border)'}}>·</span>
-                <span className="text-xs" style={{color:'var(--muted)'}}>
-                  Fatura de <span style={{color:'var(--purple)',fontWeight:700}}>{MONTHS[refMonth]} {refYear}</span>
-                </span>
-              </div>
-            )}
+            {presetCard && (() => {
+              const dueM = refMonth + 1 > 11 ? 0 : refMonth + 1
+              const dueY = refMonth + 1 > 11 ? refYear + 1 : refYear
+              return (
+                <div className="flex items-center gap-3 mt-2 px-3 py-1.5 rounded-lg" style={{background:'rgba(139,92,246,.08)',border:'1px solid rgba(139,92,246,.2)',display:'inline-flex'}}>
+                  <span className="text-xs" style={{color:'var(--muted)'}}>
+                    Fatura de <span style={{color:'var(--purple)',fontWeight:700}}>{MONTHS[refMonth]} {refYear}</span>
+                  </span>
+                  <span style={{color:'var(--border)'}}>·</span>
+                  <span className="text-xs" style={{color:'var(--muted)'}}>
+                    Vence <span style={{color:'var(--purple)',fontWeight:700}}>{presetCard.due} de {MONTHS[dueM]}</span>
+                  </span>
+                </div>
+              )
+            })()}
           </div>
           <button onClick={onClose} style={{background:'none',border:'none',color:'var(--muted)',fontSize:18,cursor:'pointer',padding:'2px 6px'}}>✕</button>
         </div>
