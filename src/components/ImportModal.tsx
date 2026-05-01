@@ -26,6 +26,10 @@ TRANSFERENCIAS (type="transferencia") — NÃO são receita nem despesa:
   são movimentações internas de ciclo de rendimento — OMITIR ambos completamente do resultado.
   Só inclua "Pagamento com Pix recebido" se NÃO tiver saída do mesmo valor (dinheiro real externo).
   Só inclua "Pagamento com Pix enviado" se NÃO tiver entrada do mesmo valor (despesa real).
+- REGRA ESPECIAL entradas no 99PAY — quase tudo é transferência interna:
+  Entradas no 99 são quase sempre transferências entre contas próprias (dinheiro do Nubank/Santander movido para render).
+  EXCEÇÃO: entrada de valor PRÓXIMO a R$ 3.500-4.500 → é o salário da Daiana (receita real, cat="Salário", icon="💼")
+  QUALQUER outra entrada que não seja Lucro/rendimento e não seja ~R$4k → type="transferencia", NÃO é receita.
 
 RECEITAS (type="receita"):
 - "CAIXA ECONOMICA FEDERAL" entrada → receita, cat="Renda Extra", icon="💰" (FGTS aniversário)
