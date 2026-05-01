@@ -109,11 +109,10 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
   const presetLabel = presetCard ? ('💳 ' + presetCard.name) : presetAcc ? ('🏦 ' + presetAcc.name) : null
 
   function isDup(name: string, val: number, dateISO: string) {
-    const month = dateISO.slice(0, 7) // 'YYYY-MM'
     return db.transactions.some(t =>
       t.name.toLowerCase() === name.toLowerCase() &&
       Math.abs(t.val - val) < 0.02 &&
-      t.dateISO.slice(0, 7) === month
+      t.dateISO === dateISO
     )
   }
 
