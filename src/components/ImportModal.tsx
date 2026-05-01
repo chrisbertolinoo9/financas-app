@@ -20,12 +20,12 @@ TRANSFERENCIAS (type="transferencia") — NÃO são receita nem despesa:
 - Pix para Banco XP / Rico → transferencia
 - "Depósito Recebido por Boleto" → transferencia (benefício Swile transferido para conta)
 - Pix recebido de DAIANA VITORIA → transferencia (repasse entre casal)
-- REGRA ESPECIAL extrato 99PAY — ciclo de CDI (valores que entram e saem em pares):
-  Analise TODOS os "Pagamento com Pix recebido" e "Pagamento com Pix enviado" do extrato.
-  Se um valor de entrada tem um valor de saída IGUAL no mesmo extrato (ex: +R$30.000 e -R$30.000),
-  são movimentações internas de ciclo de rendimento — OMITIR ambos completamente do resultado.
-  Só inclua "Pagamento com Pix recebido" se NÃO tiver saída do mesmo valor (dinheiro real externo).
-  Só inclua "Pagamento com Pix enviado" se NÃO tiver entrada do mesmo valor (despesa real).
+- REGRA ESPECIAL extrato 99PAY — ciclo de CDI (movimentações internas de rendimento):
+  O titular move dinheiro para o 99 render CDI maior, depois retira. Os valores podem voltar FRACIONADOS.
+  Exemplo: saiu -R$30.000, voltou +R$20.000 e +R$10.000 em datas próximas = ciclo interno, OMITIR tudo.
+  LÓGICA: some todas as saídas grandes (>R$5.000) e todas as entradas grandes (>R$5.000) do extrato.
+  Se o total de entradas grandes ≈ total de saídas grandes (diferença < 10%), OMITIR todos esses lançamentos.
+  Se sobrar diferença significativa (>10%), incluir apenas a diferença como transferencia.
 - REGRA ESPECIAL entradas no 99PAY — quase tudo é transferência interna:
   Entradas no 99 são quase sempre transferências entre contas próprias (dinheiro do Nubank/Santander movido para render).
   EXCEÇÃO: entrada de valor PRÓXIMO a R$ 3.500-4.500 → é o salário da Daiana (receita real, cat="Salário", icon="💼")
