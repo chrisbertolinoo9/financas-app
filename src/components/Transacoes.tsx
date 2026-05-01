@@ -6,7 +6,7 @@ import type { Transaction } from '../types'
 interface Props { curMonth: number; curYear: number }
 
 const CATS = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','Lazer','Airsoft','Viagem','PC','Games',
-  'Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Gasto Cartão','Renda Extra','Outros']
+  'Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Rendimento','Gasto Cartão','Renda Extra','Outros']
 
 export default function Transacoes({ curMonth, curYear }: Props) {
   const { db, addTransaction, updateTransaction, deleteTransaction, addTransfer } = useDB()
