@@ -32,6 +32,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
   const [editTxId, setEditTxId] = useState<string|null>(null)
   const [editCat, setEditCat] = useState('')
   const [editName, setEditName] = useState('')
+  const [editType, setEditType] = useState<'receita'|'despesa'>('despesa')
   const [customCats, setCustomCats] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('fp_custom_import_cats') || '[]') } catch { return [] }
   })
@@ -234,6 +235,11 @@ export default function Cartoes({ curMonth, curYear }: Props) {
                       <div className="flex gap-2">
                         <input value={editName} onChange={e=>setEditName(e.target.value)}
                           style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'5px 8px',fontFamily:'Sora,sans-serif',fontSize:11,color:'var(--text)',outline:'none'}} />
+                        <select value={editType} onChange={e=>setEditType(e.target.value as 'receita'|'despesa')}
+                          style={{width:90,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'5px 6px',fontFamily:'Sora,sans-serif',fontSize:11,color:editType==='receita'?'var(--green)':'var(--red)',outline:'none',cursor:'pointer',fontWeight:700}}>
+                          <option value="despesa">↓ Despesa</option>
+                          <option value="receita">↑ Receita</option>
+                        </select>
                         {newCatMode ? (
                           <input autoFocus value={newCatVal} onChange={e=>setNewCatVal(e.target.value)}
                             onKeyDown={e=>{
@@ -259,7 +265,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
                           Cancelar
                         </button>
                         <button onClick={()=>{
-                          updateTransaction({...t, name:editName, cat:editCat, icon:C_ICON[editCat]||t.icon, color:C_COLOR[editCat]||t.color})
+                          updateTransaction({...t, name:editName, cat:editCat, type:editType, icon:C_ICON[editCat]||t.icon, color:C_COLOR[editCat]||t.color})
                           setEditTxId(null)
                         }}
                           style={{padding:'4px 12px',background:'var(--accent)',border:'none',borderRadius:6,color:'#fff',fontFamily:'Sora,sans-serif',fontSize:11,fontWeight:700,cursor:'pointer'}}>
@@ -272,7 +278,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
                     <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg group relative cursor-pointer"
                       onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='var(--bg3)'}
                       onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}
-                      onClick={()=>{setEditTxId(t.id);setEditCat(t.cat);setEditName(t.name)}}>
+                      onClick={()=>{setEditTxId(t.id);setEditCat(t.cat);setEditName(t.name);setEditType(t.type==='receita'?'receita':'despesa')}}>
                       <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
                         style={{background:(C_COLOR[t.cat]||'#6b7591')+'22'}}>{t.icon||'💰'}</div>
                       <div className="flex-1 min-w-0">
