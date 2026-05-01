@@ -69,6 +69,7 @@ interface PendingRow {
   icon: string
   date: string
   dateISO: string
+  parcela?: string  // ex: "4/6"
 }
 
 interface Props {
@@ -165,7 +166,9 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
         const parts = (t.date||'').split('/')
         const dateISO = parts.length===2 ? `${year}-${month}-${parts[0].padStart(2,'0')}` : `${year}-${month}-01`
         const dup = isDup(t.name, t.val, dateISO)
-        return { ...t, _id:i, _sel:!dup, _dup:dup, dateISO, dir: t.dir || (t.type === 'transferencia' ? 'out' : undefined) }
+        const parcelaMatch = t.name.match(/[Pp]arcela\s+(\d+\/\d+)/)
+        const parcela = parcelaMatch ? parcelaMatch[1] : undefined
+        return { ...t, _id:i, _sel:!dup, _dup:dup, dateISO, dir: t.dir || (t.type === 'transferencia' ? 'out' : undefined), parcela }
       })
       setProg(100); setAiMsg('Concluído!'); setAiSub('')
       await new Promise(r => setTimeout(r, 400))
@@ -255,7 +258,10 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
     newTxs.forEach(t => {
       if (t.type !== 'despesa') return
       // Detecta padrao "Parcela X/N" ou "- Parcela X/6" no nome
-      const match = t.name.match(/[Pp]arcela\s+(\d+)\/(\d+)/)
+      // Usa parcela editada pelo usuario se disponivel, senao detecta pelo nome
+      const parcelaStr = (t as PendingRow).parcela || ''
+      const parcelaFromField = parcelaStr.match(/^(\d+)\/(\d+)$/)
+      const match = parcelaFromField || t.name.match(/[Pp]arcela\s+(\d+)\/(\d+)/)
       if (!match) return
       const current_p = parseInt(match[1])
       const total_p   = parseInt(match[2])
@@ -489,12 +495,12 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
             </div>
 
             <div className="rounded-xl overflow-hidden mb-4" style={{border:'1px solid var(--border)',maxHeight:340,overflowY:'auto'}}>
-              <div className="grid gap-1 px-3 py-2 text-xs font-bold uppercase tracking-wide" style={{gridTemplateColumns:'24px 1fr 90px 80px 55px 75px',color:'var(--muted)',borderBottom:'1px solid var(--border)',background:'var(--bg3)'}}>
-                <div/><div>Descrição</div><div>Categoria</div><div>Tipo</div><div>Data</div><div>Valor</div>
+              <div className="grid gap-1 px-3 py-2 text-xs font-bold uppercase tracking-wide" style={{gridTemplateColumns:'24px 1fr 90px 80px 55px 52px 75px',color:'var(--muted)',borderBottom:'1px solid var(--border)',background:'var(--bg3)'}}>
+                <div/><div>Descrição</div><div>Categoria</div><div>Tipo</div><div>Data</div><div>Parc.</div><div>Valor</div>
               </div>
               {pending.map((r,i) => (
                 <div key={r._id} className="grid gap-1 px-3 py-2 items-center transition-colors"
-                  style={{gridTemplateColumns:'24px 1fr 90px 80px 55px 75px',borderBottom:'1px solid var(--border)',background:r.type==='transferencia'?'rgba(99,102,241,.04)':r._dup?'rgba(239,68,68,.04)':r._sel?'':'rgba(0,0,0,.15)',opacity:r._sel?1:.5}}>
+                  style={{gridTemplateColumns:'24px 1fr 90px 80px 55px 52px 75px',borderBottom:'1px solid var(--border)',background:r.type==='transferencia'?'rgba(99,102,241,.04)':r._dup?'rgba(239,68,68,.04)':r._sel?'':'rgba(0,0,0,.15)',opacity:r._sel?1:.5}}>
                   <div onClick={()=>setPending(p=>p.map((x,j)=>j===i?{...x,_sel:!x._sel}:x))}
                     style={{width:17,height:17,borderRadius:4,border:'1px solid var(--border)',background:r._sel?'var(--accent)':'var(--bg3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,cursor:'pointer',color:'#fff'}}>
                     {r._sel?'✓':''}
@@ -514,6 +520,8 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
                     <option value="transferencia">⇄ Transf.</option>
                   </select>
                   <input value={r.date} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,date:e.target.value}:x))} style={{...inputStyle,padding:'3px 4px',fontSize:10}} />
+                  <input value={r.parcela || ''} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,parcela:e.target.value}:x))}
+                    placeholder="—" style={{...inputStyle,padding:'3px 4px',fontSize:10,textAlign:'center'}} />
                   <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,fontWeight:700,color:typeColor(r.type)}}>
                     {typePrefix(r.type)} {fmt(r.val)}
                   </div>
