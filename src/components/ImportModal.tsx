@@ -46,6 +46,7 @@ CATEGORIAS disponíveis: Alimentação, Supermercado, Moradia, Transporte, Saúd
 IMPORTANTE:
 - Valores numéricos puros sem R$ ou pontos de milhar (ex: 1234.56)
 - Descrição curta e legível (máximo 40 caracteres)
+- Para transferencias, adicione o campo "dir":"in" se o dinheiro ENTROU na conta ou "dir":"out" se SAIU
 - Se não houver transações retorne transactions:[]
 - Inclua TODAS as transações, inclusive transferências`
 
@@ -56,6 +57,7 @@ interface PendingRow {
   name: string
   val: number
   type: 'receita' | 'despesa' | 'transferencia'
+  dir?: 'in' | 'out'
   cat: string
   icon: string
   date: string
@@ -148,7 +150,7 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
         const parts = (t.date||'').split('/')
         const dateISO = parts.length===2 ? `${year}-${month}-${parts[0].padStart(2,'0')}` : `${year}-${month}-01`
         const dup = isDup(t.name, t.val)
-        return { ...t, _id:i, _sel:!dup, _dup:dup, dateISO }
+        return { ...t, _id:i, _sel:!dup, _dup:dup, dateISO, dir: t.dir || (t.type === 'transferencia' ? 'out' : undefined) }
       })
       setProg(100); setAiMsg('Concluído!'); setAiSub('')
       await new Promise(r => setTimeout(r, 400))
@@ -185,28 +187,33 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
           !t.toAccId // ainda nao vinculado
         )
 
+        const dir = r.dir || 'out'
         if (mirror && finalAccId) {
-          // Vincula o par: mirror.toAccId = finalAccId, novo.toAccId = mirror.accId
-          const linkedMirror = { ...mirror, toAccId: finalAccId }
+          // Vincula o par — determina quem e origem e quem e destino pelo dir
+          const mirrorDir = dir === 'out' ? 'in' : 'out'
+          const linkedMirror = { ...mirror, toAccId: finalAccId, transferDir: mirrorDir }
           patchedExisting.set(mirror.id, linkedMirror)
           newTxs.push({
             id: genId(), name: r.name, cat: 'Transferência',
             type: 'transferencia' as const, val: r.val,
             dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
             icon: '⇄', color: '#6b7591',
-            accId: finalAccId, cardId: null, toAccId: mirror.accId,
+            accId: finalAccId, cardId: null,
+            toAccId: dir === 'out' ? mirror.accId : null,
+            transferDir: dir,
             invoiceMonth: null, invoiceYear: null,
-          })
+          } as Transaction & { transferDir: string })
         } else {
-          // Sem par — salva sem vinculo por enquanto
+          // Sem par — salva com dir para o computeBalance usar depois
           newTxs.push({
             id: genId(), name: r.name, cat: 'Transferência',
             type: 'transferencia' as const, val: r.val,
             dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
             icon: '⇄', color: '#6b7591',
             accId: finalAccId, cardId: null, toAccId: null,
+            transferDir: dir,
             invoiceMonth: null, invoiceYear: null,
-          })
+          } as Transaction & { transferDir: string })
         }
       } else {
         newTxs.push({
