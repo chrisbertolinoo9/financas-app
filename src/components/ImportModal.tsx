@@ -223,33 +223,17 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
         )
 
         const dir = r.dir || 'out'
-        if (mirror && finalAccId) {
-          // Vincula o par — determina quem e origem e quem e destino pelo dir
-          const mirrorDir = dir === 'out' ? 'in' : 'out'
-          const linkedMirror = { ...mirror, toAccId: finalAccId, transferDir: mirrorDir }
-          patchedExisting.set(mirror.id, linkedMirror)
-          newTxs.push({
-            id: genId(), name: r.name, cat: 'Transferência',
-            type: 'transferencia' as const, val: r.val,
-            dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
-            icon: '⇄', color: '#6b7591',
-            accId: finalAccId, cardId: null,
-            toAccId: dir === 'out' ? mirror.accId : null,
-            transferDir: dir,
-            invoiceMonth: null, invoiceYear: null,
-          } as Transaction & { transferDir: string })
-        } else {
-          // Sem par — salva com dir para o computeBalance usar depois
-          newTxs.push({
-            id: genId(), name: r.name, cat: 'Transferência',
-            type: 'transferencia' as const, val: r.val,
-            dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
-            icon: '⇄', color: '#6b7591',
-            accId: finalAccId, cardId: null, toAccId: null,
-            transferDir: dir,
-            invoiceMonth: null, invoiceYear: null,
-          } as Transaction & { transferDir: string })
-        }
+        // Transferencias importadas ficam sem toAccId para nao afetar saldo de outras contas.
+        // O vinculo entre contas so acontece pelo modal de transferencia manual.
+        newTxs.push({
+          id: genId(), name: r.name, cat: 'Transferência',
+          type: 'transferencia' as const, val: r.val,
+          dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
+          icon: '⇄', color: '#6b7591',
+          accId: finalAccId, cardId: null, toAccId: null,
+          transferDir: dir,
+          invoiceMonth: null, invoiceYear: null,
+        } as Transaction & { transferDir: string })
       } else {
         newTxs.push({
           id: genId(), name: r.name, cat: r.cat, type: r.type as 'receita'|'despesa', val: r.val,
