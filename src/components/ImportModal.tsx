@@ -259,7 +259,8 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
       if (t.type !== 'despesa') return
       // Detecta padrao "Parcela X/N" ou "- Parcela X/6" no nome
       // Usa parcela editada pelo usuario se disponivel, senao detecta pelo nome
-      const parcelaStr = (t as PendingRow).parcela || ''
+      const pendingRow = toImp.find(p => p.name === t.name && Math.abs(p.val - t.val) < 0.01)
+      const parcelaStr = pendingRow?.parcela || ''
       const parcelaFromField = parcelaStr.match(/^(\d+)\/(\d+)$/)
       const match = parcelaFromField || t.name.match(/[Pp]arcela\s+(\d+)\/(\d+)/)
       if (!match) return
