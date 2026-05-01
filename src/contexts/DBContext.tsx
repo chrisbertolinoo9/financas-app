@@ -1,8 +1,16 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuth } from './AuthContext'
 import { loadLocal, loadCloud, saveLocal, saveCloud, emptyDB } from '../lib/db'
 import { genId, isoToDisplay, C_ICON, C_COLOR } from '../lib/utils'
 import type { DB, Transaction, Account, Card, PlanGoal } from '../types'
+
+// Calcula saldo dinamico de uma conta: initialBalance + receitas - despesas
+// Transferencias nao afetam o saldo (sao movimentacoes entre contas proprias)
+export function computeBalance(accId: string, initialBalance: number, transactions: Transaction[]): number {
+  return transactions
+    .filter(t => t.accId === accId && t.type !== 'transferencia')
+    .reduce((sum, t) => t.type === 'receita' ? sum + t.val : sum - t.val, initialBalance)
+}
 
 interface DBContextType {
   db: DB
@@ -20,6 +28,8 @@ interface DBContextType {
   deleteCard: (id: string) => void
   upsertPlanGoal: (g: PlanGoal) => void
   clearAll: () => void
+  // Mapa de saldos dinamicos calculados: accId -> balance
+  balances: Record<string, number>
 }
 
 const DBContext = createContext<DBContextType>({} as DBContextType)
@@ -54,6 +64,15 @@ export function DBProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user])
 
+  // Saldos dinamicos — recalculados sempre que transacoes ou contas mudam
+  const balances = useMemo(() => {
+    const map: Record<string, number> = {}
+    db.accounts.forEach(a => {
+      map[a.id] = computeBalance(a.id, a.initialBalance || 0, db.transactions)
+    })
+    return map
+  }, [db.accounts, db.transactions])
+
   const addTransaction    = (t: Transaction) => save({ ...db, transactions: [t, ...db.transactions] })
   const updateTransaction = (t: Transaction) => save({ ...db, transactions: db.transactions.map(x => x.id===t.id ? t : x) })
   const deleteTransaction = (id: string)     => save({ ...db, transactions: db.transactions.filter(x => x.id!==id) })
@@ -75,13 +94,13 @@ export function DBProvider({ children }: { children: React.ReactNode }) {
     save({ ...db, transactions: [saida, entrada, ...db.transactions] })
   }
 
-  const addAccount        = (a: Account)     => save({ ...db, accounts: [...db.accounts, a] })
-  const updateAccount     = (a: Account)     => save({ ...db, accounts: db.accounts.map(x => x.id===a.id ? a : x) })
-  const deleteAccount     = (id: string)     => save({ ...db, accounts: db.accounts.filter(x => x.id!==id), transactions: db.transactions.filter(x => x.accId!==id) })
-  const addCard           = (c: Card)        => save({ ...db, cards: [...db.cards, c] })
-  const updateCard        = (c: Card)        => save({ ...db, cards: db.cards.map(x => x.id===c.id ? c : x) })
-  const deleteCard        = (id: string)     => save({ ...db, cards: db.cards.filter(x => x.id!==id), transactions: db.transactions.filter(x => x.cardId!==id) })
-  const upsertPlanGoal    = (g: PlanGoal)    => {
+  const addAccount     = (a: Account) => save({ ...db, accounts: [...db.accounts, a] })
+  const updateAccount  = (a: Account) => save({ ...db, accounts: db.accounts.map(x => x.id===a.id ? a : x) })
+  const deleteAccount  = (id: string) => save({ ...db, accounts: db.accounts.filter(x => x.id!==id), transactions: db.transactions.filter(x => x.accId!==id) })
+  const addCard        = (c: Card)    => save({ ...db, cards: [...db.cards, c] })
+  const updateCard     = (c: Card)    => save({ ...db, cards: db.cards.map(x => x.id===c.id ? c : x) })
+  const deleteCard     = (id: string) => save({ ...db, cards: db.cards.filter(x => x.id!==id), transactions: db.transactions.filter(x => x.cardId!==id) })
+  const upsertPlanGoal = (g: PlanGoal) => {
     const goals = db.planGoals.findIndex(x => x.cat===g.cat) >= 0
       ? db.planGoals.map(x => x.cat===g.cat ? g : x)
       : [...db.planGoals, g]
@@ -90,7 +109,7 @@ export function DBProvider({ children }: { children: React.ReactNode }) {
   const clearAll = () => save({ ...emptyDB })
 
   return (
-    <DBContext.Provider value={{ db, ready, save, addTransaction, updateTransaction, deleteTransaction, addTransfer, addAccount, updateAccount, deleteAccount, addCard, updateCard, deleteCard, upsertPlanGoal, clearAll }}>
+    <DBContext.Provider value={{ db, ready, save, addTransaction, updateTransaction, deleteTransaction, addTransfer, addAccount, updateAccount, deleteAccount, addCard, updateCard, deleteCard, upsertPlanGoal, clearAll, balances }}>
       {children}
     </DBContext.Provider>
   )
