@@ -90,8 +90,13 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
   const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
   const presetAcc = presetAccId ? db.accounts.find(a => a.id === presetAccId) : null
 
-  function isDup(name: string, val: number) {
-    return db.transactions.some(t => t.name.toLowerCase() === name.toLowerCase() && Math.abs(t.val - val) < 0.02)
+  function isDup(name: string, val: number, dateISO: string) {
+    const month = dateISO.slice(0, 7) // 'YYYY-MM'
+    return db.transactions.some(t =>
+      t.name.toLowerCase() === name.toLowerCase() &&
+      Math.abs(t.val - val) < 0.02 &&
+      t.dateISO.slice(0, 7) === month
+    )
   }
 
   function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -149,7 +154,7 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
       const rows: PendingRow[] = (extracted.transactions||[]).map((t: {name:string;val:number;type:'receita'|'despesa'|'transferencia';dir?:'in'|'out';cat:string;icon:string;date:string}, i: number) => {
         const parts = (t.date||'').split('/')
         const dateISO = parts.length===2 ? `${year}-${month}-${parts[0].padStart(2,'0')}` : `${year}-${month}-01`
-        const dup = isDup(t.name, t.val)
+        const dup = isDup(t.name, t.val, dateISO)
         return { ...t, _id:i, _sel:!dup, _dup:dup, dateISO, dir: t.dir || (t.type === 'transferencia' ? 'out' : undefined) }
       })
       setProg(100); setAiMsg('Concluído!'); setAiSub('')
