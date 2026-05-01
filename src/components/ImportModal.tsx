@@ -9,6 +9,15 @@ const CATS = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','La
 const AI_PROMPT = `Analise este extrato bancário brasileiro. Retorne APENAS JSON válido sem markdown:
 {"transactions":[{"name":"descrição curta","val":0.00,"type":"receita|despesa|transferencia","cat":"categoria","date":"DD/MM","icon":"emoji"}]}
 
+⚠️ REGRA CRÍTICA — OBRIGATÓRIA ANTES DE QUALQUER OUTRA:
+Entradas chamadas "Lucro" ou "Lucros" são rendimentos diários de CDI do 99Pay.
+PROIBIDO criar um lançamento por dia. OBRIGATÓRIO juntar TODOS em UM ÚNICO lançamento:
+  name="Rendimento 99 - [Mês por extenso]"
+  val = SOMA de TODOS os valores "Lucro"/"Lucros" do extrato
+  type="receita", cat="Rendimento", icon="📈"
+  date = último dia do mês (ex: 28/02 para fevereiro)
+Se houver 30 lucros diários, o JSON final terá APENAS 1 entrada de Rendimento, nunca 30.
+
 REGRAS DE CLASSIFICAÇÃO:
 
 TRANSFERENCIAS (type="transferencia") — NÃO são receita nem despesa:
@@ -631,3 +640,4 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId, p
     </div>
   )
 }
+
