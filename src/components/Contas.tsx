@@ -13,12 +13,6 @@ const ACC_TYPES = [
 const COLORS = ['#6366f1','#22c55e','#06b6d4','#f59e0b','#ef4444','#8b5cf6']
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
-// Saldo da conta = sempre o balance atual salvo (fonte da verdade)
-// O balance já foi calculado corretamente ao longo do uso
-function balanceUpTo(_accId: string, _txs: Transaction[], _init: number, _m: number, _y: number, balance: number) {
-  return balance
-}
-
 export default function Contas({ curMonth, curYear }: Props) {
   const { db, addAccount, updateAccount, deleteAccount } = useDB()
   const [modal, setModal] = useState(false)
@@ -29,15 +23,14 @@ export default function Contas({ curMonth, curYear }: Props) {
   const [color, setColor] = useState(COLORS[0])
   const [delId, setDelId] = useState<string|null>(null)
   const [detailAcc, setDetailAcc] = useState<Account|null>(null)
-  const [txTab, setTxTab] = useState<'all'|'month'|'despesa'|'receita'>('month')
+  const [txTab, setTxTab] = useState<'all'|'month'|'despesa'|'receita'|'transferencia'>('month')
 
   const active   = useMemo(() => db.accounts.filter(a => !a.archived), [db.accounts])
   const archived = useMemo(() => db.accounts.filter(a => a.archived),  [db.accounts])
 
-  // Saldo de cada conta ATÉ o mês selecionado
   const balances = useMemo(() =>
     Object.fromEntries(active.map(a => [a.id, a.balance])),
-    [active, db.transactions, curMonth, curYear]
+    [active]
   )
   const total = useMemo(() => Object.values(balances).reduce((s,v) => s+v, 0), [balances])
 
@@ -60,25 +53,34 @@ export default function Contas({ curMonth, curYear }: Props) {
     setModal(false)
   }
 
-  // Transações do drawer — filtradas por modo
+  // Transacoes do drawer
   const accTxs = useMemo(() => {
     if (!detailAcc) return []
     let txs = db.transactions.filter(t => t.accId === detailAcc.id)
-    if (txTab === 'month')   txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear))
-    if (txTab === 'despesa') txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type==='despesa')
-    if (txTab === 'receita') txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type==='receita')
+    if (txTab === 'month')        txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear))
+    if (txTab === 'despesa')      txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type === 'despesa')
+    if (txTab === 'receita')      txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type === 'receita')
+    if (txTab === 'transferencia') txs = txs.filter(t => inMonth(t.dateISO, curMonth, curYear) && t.type === 'transferencia')
     return [...txs].sort((a,b) => b.dateISO.localeCompare(a.dateISO))
   }, [detailAcc, db.transactions, txTab, curMonth, curYear])
 
-  // Receita/despesa DO MÊS para o drawer
-  const accRecMes  = useMemo(() => detailAcc ? db.transactions.filter(t=>t.accId===detailAcc.id&&inMonth(t.dateISO,curMonth,curYear)&&t.type==='receita').reduce((s,t)=>s+t.val,0) : 0, [detailAcc, db.transactions, curMonth, curYear])
-  const accDespMes = useMemo(() => detailAcc ? db.transactions.filter(t=>t.accId===detailAcc.id&&inMonth(t.dateISO,curMonth,curYear)&&t.type==='despesa').reduce((s,t)=>s+t.val,0) : 0, [detailAcc, db.transactions, curMonth, curYear])
-  // Saldo até o mês para a conta no drawer
+  // Receita/despesa do mes — transferencias NAO entram
+  const accRecMes  = useMemo(() =>
+    detailAcc ? db.transactions.filter(t => t.accId===detailAcc.id && inMonth(t.dateISO,curMonth,curYear) && t.type==='receita').reduce((s,t)=>s+t.val,0) : 0,
+    [detailAcc, db.transactions, curMonth, curYear])
+  const accDespMes = useMemo(() =>
+    detailAcc ? db.transactions.filter(t => t.accId===detailAcc.id && inMonth(t.dateISO,curMonth,curYear) && t.type==='despesa').reduce((s,t)=>s+t.val,0) : 0,
+    [detailAcc, db.transactions, curMonth, curYear])
+  const accTransfMes = useMemo(() =>
+    detailAcc ? db.transactions.filter(t => t.accId===detailAcc.id && inMonth(t.dateISO,curMonth,curYear) && t.type==='transferencia').length : 0,
+    [detailAcc, db.transactions, curMonth, curYear])
+
   const detailBal = detailAcc ? detailAcc.balance : 0
 
-  const tabBtn = (id: 'all'|'month'|'despesa'|'receita', label: string, activeColor: string) => (
+  const tabBtn = (id: 'all'|'month'|'despesa'|'receita'|'transferencia', label: string, activeColor: string) => (
     <button onClick={() => setTxTab(id)} style={{
-      padding:'6px 14px', borderRadius:20, border:'1px solid '+(txTab===id ? activeColor : 'var(--border)'),
+      padding:'6px 14px', borderRadius:20,
+      border:'1px solid '+(txTab===id ? activeColor : 'var(--border)'),
       background: txTab===id ? activeColor+'18' : 'transparent',
       color: txTab===id ? activeColor : 'var(--muted)',
       fontFamily:'Sora,sans-serif', fontSize:'11px', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'
@@ -105,7 +107,7 @@ export default function Contas({ curMonth, curYear }: Props) {
         <div className="rounded-2xl p-4 mb-4 flex items-center flex-wrap gap-3" style={{background:'var(--card)',border:'1px solid var(--border)'}}>
           <div className="flex-1">
             <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{color:'var(--muted)'}}>
-              Patrimônio em {MONTHS[curMonth]} {curYear}
+              Patrimônio Total
             </div>
             <div className="font-mono text-2xl font-extrabold" style={{color:'var(--blue)'}}>R$ {fmt(total)}</div>
             <div className="text-xs mt-0.5" style={{color:'var(--muted)'}}>{active.length} conta{active.length!==1?'s':''} ativa{active.length!==1?'s':''}</div>
@@ -147,7 +149,6 @@ export default function Contas({ curMonth, curYear }: Props) {
             <div className="font-mono text-lg font-extrabold" style={{color:balances[a.id]>=0?'var(--green)':'var(--red)'}}>
               R$ {fmt(balances[a.id])}
             </div>
-            
             <div className="mt-3 pt-3 text-center" style={{borderTop:'1px solid var(--border)'}}>
               <span className="text-xs font-bold" style={{color:'var(--accent)'}}>VER DETALHES →</span>
             </div>
@@ -199,9 +200,7 @@ export default function Contas({ curMonth, curYear }: Props) {
               <div className="text-xs uppercase tracking-wide mb-1" style={{color:'var(--muted)'}}>
                 {ACC_TYPES.find(t=>t.val===detailAcc.type)?.lbl||detailAcc.type}
               </div>
-              <div className="text-xs mb-1" style={{color:'var(--muted)'}}>
-                Saldo Atual
-              </div>
+              <div className="text-xs mb-1" style={{color:'var(--muted)'}}>Saldo Atual</div>
               <div className="font-mono text-3xl font-extrabold mb-4" style={{color:detailBal>=0?'var(--green)':'var(--red)'}}>
                 R$ {fmt(detailBal)}
               </div>
@@ -218,12 +217,12 @@ export default function Contas({ curMonth, curYear }: Props) {
               </div>
             </div>
 
-            {/* Summary do mês */}
+            {/* Summary do mes — sem transferencias */}
             <div className="grid grid-cols-3 gap-2 p-4" style={{borderBottom:'1px solid var(--border)'}}>
               {[
-                {label:'Entradas no mês',value:fmt(accRecMes),color:'var(--green)'},
-                {label:'Saídas no mês',value:fmt(accDespMes),color:'var(--red)'},
-                {label:'Saldo do mês',value:fmt(accRecMes-accDespMes),color:accRecMes-accDespMes>=0?'var(--green)':'var(--red)'},
+                {label:'Entradas',value:fmt(accRecMes),color:'var(--green)'},
+                {label:'Saídas',value:fmt(accDespMes),color:'var(--red)'},
+                {label:'Balanço',value:fmt(accRecMes-accDespMes),color:accRecMes-accDespMes>=0?'var(--green)':'var(--red)'},
               ].map(k=>(
                 <div key={k.label} className="rounded-xl p-3" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
                   <div style={{color:'var(--muted)',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:4}}>{k.label}</div>
@@ -231,37 +230,52 @@ export default function Contas({ curMonth, curYear }: Props) {
                 </div>
               ))}
             </div>
+            {accTransfMes > 0 && (
+              <div className="px-4 py-2 text-xs" style={{color:'var(--muted)',borderBottom:'1px solid var(--border)'}}>
+                ⇄ {accTransfMes} transferência{accTransfMes !== 1 ? 's' : ''} no mês (não contam no balanço)
+              </div>
+            )}
 
             {/* Tabs */}
             <div className="p-4">
               <div className="text-xs font-bold uppercase tracking-wide mb-3" style={{color:'var(--muted)'}}>Movimentações</div>
               <div className="flex gap-1.5 mb-4 flex-wrap">
-                {tabBtn('month', `${MONTHS[curMonth].slice(0,3)} ${curYear}`, 'var(--accent)')}
+                {tabBtn('month', MONTHS[curMonth].slice(0,3) + ' ' + curYear, 'var(--accent)')}
                 {tabBtn('despesa','● Saídas','var(--red)')}
                 {tabBtn('receita','● Entradas','var(--green)')}
+                {tabBtn('transferencia','⇄ Transf.','var(--blue)')}
                 {tabBtn('all','● Histórico','var(--muted)')}
               </div>
               <div className="flex flex-col gap-0.5 max-h-96 overflow-y-auto">
-                {accTxs.length ? accTxs.map((t: Transaction) => (
-                  <div key={t.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg"
-                    onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='var(--bg3)'}
-                    onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
-                      style={{background:(C_COLOR[t.cat]||'#6b7591')+'22'}}>
-                      {t.icon||C_ICON[t.cat]||'💰'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold truncate">{t.name}</div>
-                      <div className="text-xs" style={{color:'var(--muted)'}}>{t.cat}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="font-mono text-xs font-bold" style={{color:t.type==='receita'?'var(--green)':'var(--red)'}}>
-                        {t.type==='receita'?'+':'-'} R$ {fmt(t.val)}
+                {accTxs.length ? accTxs.map((t: Transaction) => {
+                  const isTransfer = t.type === 'transferencia'
+                  const otherAcc = isTransfer && t.toAccId ? db.accounts.find(a => a.id === t.toAccId) : null
+                  return (
+                    <div key={t.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg"
+                      onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='var(--bg3)'}
+                      onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
+                        style={{background: isTransfer ? '#6b759118' : (C_COLOR[t.cat]||'#6b7591')+'22'}}>
+                        {isTransfer ? '⇄' : (t.icon||C_ICON[t.cat]||'💰')}
                       </div>
-                      <div className="text-xs" style={{color:'var(--muted)'}}>{isoToDisplay(t.dateISO)}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold truncate">{t.name}</div>
+                        <div className="text-xs" style={{color:'var(--muted)'}}>
+                          {isTransfer
+                            ? (otherAcc ? '→ ' + otherAcc.name : 'Transferência')
+                            : t.cat}
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="font-mono text-xs font-bold"
+                          style={{color: isTransfer ? 'var(--muted)' : t.type==='receita' ? 'var(--green)' : 'var(--red)'}}>
+                          {isTransfer ? '⇄' : t.type==='receita' ? '+' : '-'} R$ {fmt(t.val)}
+                        </div>
+                        <div className="text-xs" style={{color:'var(--muted)'}}>{isoToDisplay(t.dateISO)}</div>
+                      </div>
                     </div>
-                  </div>
-                )) : (
+                  )
+                }) : (
                   <div className="text-center py-8 text-xs" style={{color:'var(--muted)'}}>
                     Nenhuma movimentação em {MONTHS[curMonth]} {curYear}
                   </div>
