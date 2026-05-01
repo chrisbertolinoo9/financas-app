@@ -8,10 +8,8 @@ interface Props { curMonth: number; curYear: number }
 const CATS = ['Alimentação','Moradia','Transporte','Saúde','Lazer','Salário',
   'Freelance','Assinatura','Educação','Vestuário','Combustível','Outros']
 
-const ACC_ICONS: Record<string,string> = { corrente:'🏦', poupanca:'🐷', investimento:'📈', carteira:'👛', outro:'💳' }
-
 export default function Transacoes({ curMonth, curYear }: Props) {
-  const { db, addTransaction, updateTransaction, deleteTransaction } = useDB()
+  const { db, addTransaction, updateTransaction, deleteTransaction, addTransfer } = useDB()
   const [search, setSearch] = useState('')
   const [typeF, setTypeF] = useState('')
   const [showAll, setShowAll] = useState(false)
@@ -23,15 +21,16 @@ export default function Transacoes({ curMonth, curYear }: Props) {
   const [date, setDate] = useState(todayISO())
   const [cat, setCat] = useState('Outros')
   const [accId, setAccId] = useState('')
+  const [toAccId, setToAccId] = useState('')
   const [delId, setDelId] = useState<string|null>(null)
 
-  // Filtro por mês — respeita o mês selecionado no topbar
+  const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+
   const monthTxs = useMemo(() =>
     db.transactions.filter(t => inMonth(t.dateISO, curMonth, curYear)),
     [db.transactions, curMonth, curYear]
   )
 
-  // Modo "ver todas" ignora o filtro de mês
   const baseTxs = useMemo(() =>
     showAll
       ? [...db.transactions].sort((a,b) => b.dateISO.localeCompare(a.dateISO))
@@ -46,47 +45,54 @@ export default function Transacoes({ curMonth, curYear }: Props) {
     return txs
   }, [baseTxs, search, typeF])
 
-  const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+  // Totais do mes — transferencias nao entram
+  const totalRec  = useMemo(() => monthTxs.filter(t => t.type === 'receita').reduce((s,t) => s+t.val, 0), [monthTxs])
+  const totalDesp = useMemo(() => monthTxs.filter(t => t.type === 'despesa').reduce((s,t) => s+t.val, 0), [monthTxs])
 
   function openNew() {
     setEditId(null); setTab('despesa'); setDesc(''); setVal('')
     setDate(todayISO()); setCat('Outros')
-    setAccId(db.accounts[0]?.id || ''); setModal(true)
+    setAccId(db.accounts[0]?.id || '')
+    setToAccId(db.accounts[1]?.id || '')
+    setModal(true)
   }
 
   function openEdit(t: Transaction) {
     setEditId(t.id)
     setTab(t.type === 'despesa' ? 'despesa' : t.type === 'receita' ? 'receita' : 'transferencia')
     setDesc(t.name); setVal(String(t.val)); setDate(t.dateISO)
-    setCat(t.cat); setAccId(t.accId || ''); setModal(true)
+    setCat(t.cat); setAccId(t.accId || '')
+    setToAccId(t.toAccId || '')
+    setModal(true)
   }
 
   function save() {
-    if (!desc || !val || !date) return
+    if (!desc && tab !== 'transferencia') return
+    if (!val || !date) return
     const v = parseFloat(val)
     if (!v) return
-    const type = tab === 'transferencia' ? 'despesa' : tab
+
+    if (tab === 'transferencia') {
+      if (!accId || !toAccId || accId === toAccId) return
+      addTransfer(accId, toAccId, v, date, desc || 'Transferência')
+      setModal(false)
+      return
+    }
+
     const obj: Transaction = {
       id: editId || genId(),
-      name: desc, cat, type, val: v,
+      name: desc, cat, type: tab, val: v,
       dateISO: date, date: isoToDisplay(date),
       icon: C_ICON[cat] || '💰',
       color: C_COLOR[cat] || '#6b7591',
       accId: accId || null,
       cardId: null,
+      toAccId: null,
     }
     if (editId) updateTransaction(obj)
     else addTransaction(obj)
     setModal(false)
   }
-
-  const tabStyle = (t: string) => ({
-    flex: 1, padding: '8px', borderRadius: '8px',
-    border: '1px solid ' + (tab === t ? 'var(--accent)' : 'var(--border)'),
-    background: tab === t ? 'var(--glow)' : 'transparent',
-    color: tab === t ? 'var(--accent)' : 'var(--muted)',
-    fontFamily: 'Sora, sans-serif', fontSize: '12px', fontWeight: 600, cursor: 'pointer'
-  })
 
   const inputStyle = {
     width: '100%', background: 'var(--bg3)', border: '1.5px solid var(--border)',
@@ -94,21 +100,60 @@ export default function Transacoes({ curMonth, curYear }: Props) {
     fontSize: '13px', color: 'var(--text)', outline: 'none'
   }
 
+  const tabBtn = (id: 'receita'|'despesa'|'transferencia', label: string, color: string) => (
+    <button onClick={() => setTab(id)} style={{
+      flex: 1, padding: '8px', borderRadius: '8px',
+      border: '1px solid ' + (tab === id ? color : 'var(--border)'),
+      background: tab === id ? color + '18' : 'transparent',
+      color: tab === id ? color : 'var(--muted)',
+      fontFamily: 'Sora, sans-serif', fontSize: '12px', fontWeight: 600, cursor: 'pointer'
+    }}>{label}</button>
+  )
+
+  const typeColor = (t: Transaction) => {
+    if (t.type === 'receita') return 'var(--green)'
+    if (t.type === 'transferencia') return 'var(--muted)'
+    return 'var(--red)'
+  }
+  const typePrefix = (t: Transaction) => {
+    if (t.type === 'receita') return '+'
+    if (t.type === 'transferencia') return '⇄'
+    return '-'
+  }
+
   return (
     <div>
+      {/* Resumo do mes */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="rounded-2xl p-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>Receitas</div>
+          <div className="font-mono text-base font-extrabold" style={{ color: 'var(--green)' }}>R$ {fmt(totalRec)}</div>
+        </div>
+        <div className="rounded-2xl p-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>Despesas</div>
+          <div className="font-mono text-base font-extrabold" style={{ color: 'var(--red)' }}>R$ {fmt(totalDesp)}</div>
+        </div>
+        <div className="rounded-2xl p-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+          <div className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>Balanço</div>
+          <div className="font-mono text-base font-extrabold" style={{ color: totalRec - totalDesp >= 0 ? 'var(--green)' : 'var(--red)' }}>
+            R$ {fmt(totalRec - totalDesp)}
+          </div>
+        </div>
+      </div>
+
       {/* Toolbar */}
       <div className="flex gap-2 mb-5 flex-wrap items-center">
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="🔍 Buscar..." style={{ ...inputStyle, maxWidth: 220 }} />
-        <select value={typeF} onChange={e => setTypeF(e.target.value)} style={{ ...inputStyle, maxWidth: 140 }}>
+        <select value={typeF} onChange={e => setTypeF(e.target.value)} style={{ ...inputStyle, maxWidth: 160 }}>
           <option value="">Todos</option>
           <option value="receita">Receitas</option>
           <option value="despesa">Despesas</option>
+          <option value="transferencia">Transferências</option>
         </select>
-        {/* Toggle mês atual / todos */}
         <button onClick={() => setShowAll(v => !v)}
           style={{ padding:'8px 14px', borderRadius:9, border:'1px solid var(--border)', background: showAll ? 'var(--glow)' : 'transparent', color: showAll ? 'var(--accent)' : 'var(--muted)', fontFamily:'Sora,sans-serif', fontSize:12, fontWeight:600, cursor:'pointer' }}>
-          {showAll ? '📅 Todos os meses' : `📅 ${MONTHS[curMonth]} ${curYear}`}
+          {showAll ? '📅 Todos os meses' : '📅 ' + MONTHS[curMonth] + ' ' + curYear}
         </button>
         <div className="ml-auto">
           <button onClick={openNew} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white"
@@ -119,104 +164,144 @@ export default function Transacoes({ curMonth, curYear }: Props) {
       </div>
 
       {/* Lista */}
-      <div className="rounded-2xl p-5" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-sm font-bold">
-            Transações {!showAll && <span style={{color:'var(--accent)',fontWeight:700}}>— {MONTHS[curMonth]} {curYear}</span>}
+      <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+        {filtered.length === 0 ? (
+          <div className="text-center py-16 text-xs" style={{ color: 'var(--muted)' }}>
+            Nenhuma transação encontrada
           </div>
-          <div className="text-xs" style={{ color: 'var(--muted)' }}>
-            {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
-            {!showAll && db.transactions.length !== filtered.length && (
-              <span style={{color:'var(--muted)',marginLeft:6}}>de {db.transactions.length} total</span>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          {filtered.length ? filtered.map(t => (
-            <div key={t.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg group relative"
-              style={{ cursor: 'pointer' }}
+        ) : filtered.map((t, i) => {
+          const fromAcc = db.accounts.find(a => a.id === t.accId)
+          const toAcc   = t.toAccId ? db.accounts.find(a => a.id === t.toAccId) : null
+          return (
+            <div key={t.id}
+              className="flex items-center gap-3 px-4 py-3 transition-colors"
+              style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg3)'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                style={{ background: (C_COLOR[t.cat] || '#6b7591') + '22' }}>
-                {t.icon || C_ICON[t.cat] || '💰'}
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0"
+                style={{ background: t.type === 'transferencia' ? '#6b759118' : (C_COLOR[t.cat] || '#6b7591') + '22' }}>
+                {t.type === 'transferencia' ? '⇄' : (t.icon || C_ICON[t.cat] || '💰')}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold truncate">{t.name}</div>
-                <div className="text-xs" style={{ color: 'var(--muted)' }}>{t.cat}</div>
+                <div className="text-sm font-semibold truncate">{t.name}</div>
+                <div className="text-xs" style={{ color: 'var(--muted)' }}>
+                  {t.type === 'transferencia'
+                    ? (fromAcc ? fromAcc.name : '?') + ' → ' + (toAcc ? toAcc.name : '?')
+                    : t.cat + (fromAcc ? ' · ' + fromAcc.name : '')}
+                </div>
               </div>
-              <div className="text-right flex-shrink-0 group-hover:opacity-0 transition-opacity">
-                <div className="font-mono text-xs font-bold" style={{ color: t.type === 'receita' ? 'var(--green)' : 'var(--red)' }}>
-                  {t.type === 'receita' ? '+' : '-'} R$ {fmt(t.val)}
+              <div className="text-right flex-shrink-0">
+                <div className="font-mono text-sm font-bold" style={{ color: typeColor(t) }}>
+                  {typePrefix(t)} R$ {fmt(t.val)}
                 </div>
                 <div className="text-xs" style={{ color: 'var(--muted)' }}>{isoToDisplay(t.dateISO)}</div>
               </div>
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-1"
-                style={{ background: 'var(--bg3)', borderRadius: 7, padding: 3 }}>
-                <button onClick={() => openEdit(t)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', width:24, height:24, borderRadius:5, fontSize:12 }}>✏️</button>
+              <div className="flex gap-1 flex-shrink-0 ml-1">
+                {t.type !== 'transferencia' && (
+                  <button onClick={() => openEdit(t)}
+                    style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, color:'var(--muted)', padding:'4px 6px', borderRadius:6 }}>✏️</button>
+                )}
                 <button onClick={() => setDelId(t.id)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', width:24, height:24, borderRadius:5, fontSize:12 }}>🗑</button>
+                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, color:'var(--muted)', padding:'4px 6px', borderRadius:6 }}>🗑</button>
               </div>
             </div>
-          )) : (
-            <div className="text-center py-10 text-xs" style={{ color: 'var(--muted)' }}>
-              {showAll ? 'Nenhuma transação encontrada' : `Nenhuma transação em ${MONTHS[curMonth]} ${curYear}`}
-            </div>
-          )}
-        </div>
+          )
+        })}
       </div>
 
-      {/* Modal Nova/Editar */}
+      {/* Modal */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,.75)', backdropFilter: 'blur(8px)' }}
+          style={{ background:'rgba(0,0,0,.75)', backdropFilter:'blur(8px)' }}
           onClick={e => { if (e.target === e.currentTarget) setModal(false) }}>
-          <div className="w-full max-w-md rounded-2xl p-6" style={{ background: 'var(--card2)', border: '1px solid var(--border)', animation: 'mdIn .2s ease' }}>
-            <div className="text-base font-bold mb-1">{editId ? 'Editar' : 'Nova'} Transação</div>
-            <div className="text-xs mb-4" style={{ color: 'var(--muted)' }}>Registre receita, despesa ou transferência</div>
+          <div className="w-full max-w-sm rounded-2xl p-6" style={{ background:'var(--card2)', border:'1px solid var(--border)', animation:'mdIn .2s ease' }}>
+            <div className="text-base font-bold mb-4">{editId ? 'Editar' : 'Nova'} Transação</div>
+
+            {/* Tabs */}
             <div className="flex gap-1.5 mb-4">
-              {(['receita','despesa','transferencia'] as const).map(t => (
-                <button key={t} onClick={() => setTab(t)} style={tabStyle(t)}>
-                  {t === 'receita' ? '↑ Receita' : t === 'despesa' ? '↓ Despesa' : '⇄ Transf.'}
-                </button>
-              ))}
+              {tabBtn('despesa',  '↓ Despesa',      'var(--red)')}
+              {tabBtn('receita',  '↑ Receita',      'var(--green)')}
+              {tabBtn('transferencia', '⇄ Transferência', 'var(--blue)')}
             </div>
+
             <div className="flex flex-col gap-3">
+              {/* Valor */}
               <div>
-                <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color: 'var(--muted)' }}>Descrição</label>
-                <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex: Mercado, Salário..." style={inputStyle} />
+                <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color:'var(--muted)' }}>Valor (R$)</label>
+                <input type="number" value={val} onChange={e => setVal(e.target.value)}
+                  placeholder="0,00" style={inputStyle} />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color: 'var(--muted)' }}>Valor (R$)</label>
-                  <input type="number" value={val} onChange={e => setVal(e.target.value)} placeholder="0,00" style={inputStyle} />
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color: 'var(--muted)' }}>Data</label>
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle} />
-                </div>
+
+              {/* Data */}
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color:'var(--muted)' }}>Data</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle} />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color: 'var(--muted)' }}>Categoria</label>
-                  <select value={cat} onChange={e => setCat(e.target.value)} style={inputStyle}>
-                    {CATS.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color: 'var(--muted)' }}>Conta</label>
-                  <select value={accId} onChange={e => setAccId(e.target.value)} style={inputStyle}>
-                    <option value="">— Selecione —</option>
-                    {db.accounts.map(a => <option key={a.id} value={a.id}>{ACC_ICONS[a.type]} {a.name}</option>)}
-                  </select>
-                </div>
-              </div>
+
+              {tab === 'transferencia' ? (
+                <>
+                  {/* Conta origem */}
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color:'var(--muted)' }}>De (Origem)</label>
+                    <select value={accId} onChange={e => setAccId(e.target.value)} style={inputStyle}>
+                      {db.accounts.filter(a => !a.archived).map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Conta destino */}
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color:'var(--muted)' }}>Para (Destino)</label>
+                    <select value={toAccId} onChange={e => setToAccId(e.target.value)} style={inputStyle}>
+                      {db.accounts.filter(a => !a.archived && a.id !== accId).map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Descricao opcional */}
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color:'var(--muted)' }}>Descrição (opcional)</label>
+                    <input value={desc} onChange={e => setDesc(e.target.value)}
+                      placeholder="Ex: Pix para poupança" style={inputStyle} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Descricao */}
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color:'var(--muted)' }}>Descrição</label>
+                    <input value={desc} onChange={e => setDesc(e.target.value)}
+                      placeholder="Ex: Mercado, Salário..." style={inputStyle} />
+                  </div>
+                  {/* Categoria */}
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color:'var(--muted)' }}>Categoria</label>
+                    <select value={cat} onChange={e => setCat(e.target.value)} style={inputStyle}>
+                      {CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  {/* Conta */}
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wide block mb-1" style={{ color:'var(--muted)' }}>Conta</label>
+                    <select value={accId} onChange={e => setAccId(e.target.value)} style={inputStyle}>
+                      <option value="">Sem conta</option>
+                      {db.accounts.filter(a => !a.archived).map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
+
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setModal(false)} style={{ flex:1, padding:'11px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:'9px', color:'var(--muted)', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:600, cursor:'pointer' }}>Cancelar</button>
-              <button onClick={save} style={{ flex:2, padding:'11px', background: tab==='receita'?'linear-gradient(135deg,#22c55e,#16a34a)':tab==='despesa'?'linear-gradient(135deg,#ef4444,#dc2626)':'linear-gradient(135deg,var(--accent),var(--accent2))', border:'none', borderRadius:'9px', color:'#fff', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:700, cursor:'pointer' }}>
-                Salvar {tab === 'receita' ? 'Receita' : tab === 'despesa' ? 'Despesa' : 'Transferência'}
+              <button onClick={() => setModal(false)}
+                style={{ flex:1, padding:'11px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:'9px', color:'var(--muted)', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:600, cursor:'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={save}
+                style={{ flex:2, padding:'11px', background:'linear-gradient(135deg,var(--accent),var(--accent2))', border:'none', borderRadius:'9px', color:'#fff', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:700, cursor:'pointer' }}>
+                {tab === 'transferencia' ? '⇄ Transferir' : editId ? 'Salvar' : 'Adicionar'}
               </button>
             </div>
           </div>
@@ -226,13 +311,19 @@ export default function Transacoes({ curMonth, curYear }: Props) {
       {/* Delete */}
       {delId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,.75)', backdropFilter: 'blur(8px)' }}>
-          <div className="w-full max-w-xs rounded-2xl p-6" style={{ background: 'var(--card2)', border: '1px solid var(--border)', animation: 'mdIn .2s ease' }}>
-            <div className="text-base font-bold mb-2">⚠️ Confirmar exclusão</div>
-            <div className="text-xs mb-5" style={{ color: 'var(--muted)' }}>Esta ação não pode ser desfeita.</div>
+          style={{ background:'rgba(0,0,0,.75)', backdropFilter:'blur(8px)' }}>
+          <div className="w-full max-w-xs rounded-2xl p-6" style={{ background:'var(--card2)', border:'1px solid var(--border)', animation:'mdIn .2s ease' }}>
+            <div className="text-base font-bold mb-2">🗑 Excluir transação?</div>
+            <div className="text-xs mb-5" style={{ color:'var(--muted)' }}>Esta ação não pode ser desfeita.</div>
             <div className="flex gap-2">
-              <button onClick={() => setDelId(null)} style={{ flex:1, padding:'10px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:'9px', color:'var(--muted)', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:600, cursor:'pointer' }}>Cancelar</button>
-              <button onClick={() => { deleteTransaction(delId); setDelId(null) }} style={{ flex:1, padding:'10px', background:'linear-gradient(135deg,#ef4444,#dc2626)', border:'none', borderRadius:'9px', color:'#fff', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:700, cursor:'pointer' }}>Excluir</button>
+              <button onClick={() => setDelId(null)}
+                style={{ flex:1, padding:'10px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:'9px', color:'var(--muted)', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:600, cursor:'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={() => { deleteTransaction(delId); setDelId(null) }}
+                style={{ flex:1, padding:'10px', background:'linear-gradient(135deg,#ef4444,#dc2626)', border:'none', borderRadius:'9px', color:'#fff', fontFamily:'Sora,sans-serif', fontSize:'13px', fontWeight:700, cursor:'pointer' }}>
+                Excluir
+              </button>
             </div>
           </div>
         </div>
