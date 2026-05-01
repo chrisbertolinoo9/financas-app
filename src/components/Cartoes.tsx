@@ -16,18 +16,56 @@ const MONTHS_RCP = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho
 
 const RCP_PROMPT = `Analise esta fatura da RecargaPay que contém múltiplos cartões.
 Retorne APENAS JSON válido sem markdown:
-{"transactions":[{"cardNumber":"2644","name":"descrição","val":0.00,"cat":"categoria","date":"DD/MM","icon":"emoji","parcela":"X/Y ou null"}]}
+{"transactions":[{"cardNumber":"2644","name":"descrição","val":0.00,"cat":"categoria","icon":"emoji","date":"DD/MM","parcela":"X/Y ou null"}]}
 
-REGRAS:
-- Identifique a seção de cada cartão pelo número que aparece: "Cartão •••• •••• •••• 2644" ou "•••• 2397"
-- Inclua o campo cardNumber com "2644" ou "2397" conforme a seção do cartão
-- Todas as transações são despesas (não inclua o campo type)
+REGRAS GERAIS:
+- Identifique a seção de cada cartão pelo número: "Cartão •••• •••• •••• 2644" ou "•••• 2397"
+- Inclua cardNumber com "2644" ou "2397" conforme a seção
+- Todas as transações são despesas
 - Valores numéricos puros sem R$ (ex: 165.00)
-- Descrição: copie EXATAMENTE como aparece, sem resumir
-- Se houver indicação de parcela como (1/12) ou (2/4) no nome, extraia para o campo parcela (ex: "1/12")
-- Caso contrário, parcela = null
-- Ignore seções de "Próxima fatura", "Total de compras parceladas", encargos e simulações
-- Inclua TODAS as transações de ambos os cartões`
+- Descrição: copie EXATAMENTE como aparece no extrato, sem resumir
+- Se houver parcela como (1/12) ou (2/4) no nome, extraia para o campo parcela (ex: "1/12"). Caso contrário, parcela = null
+- Ignore seções "Próxima fatura", "Total de compras parceladas", encargos e simulações
+- Inclua TODAS as transações de ambos os cartões
+
+REGRAS DE CATEGORIZAÇÃO (aplicar automaticamente):
+
+Assinatura (icon: 📱):
+- "Pg Nio Fibrario" → cat="Moradia", icon="🏠" (internet fibra)
+- Qualquer "DI Google" → cat="Assinatura", icon="📱" (Google One, Strava, YouTube, Mobile, etc.)
+- "Ebn Sonyplaystat" → cat="Games", icon="🎮" (PlayStation)
+- "Apoiase" ou "Apoia.se" → cat="Assinatura", icon="📱" (plataforma criadores)
+- "Amazon Prime" → cat="Assinatura", icon="📱"
+- "Netflix" → cat="Assinatura", icon="📱"
+- "Spotify" → cat="Assinatura", icon="📱"
+- "DI Google Chatgpsao" ou "ChatGPT" ou "Openai" → cat="Assinatura", icon="📱"
+- "Uninter" ou "UNINTER" → cat="Educação", icon="📚"
+
+Alimentação (icon: 🍽️):
+- "Mercearia Prontacuritibra" → cat="Alimentação", icon="🛒"
+- "Ifd" (iFood) + qualquer nome → cat="Alimentação", icon="🍽️" (delivery)
+- "Ifd Fruta" ou açaí → cat="Alimentação", icon="🍽️"
+- "Arrigo Franco" → cat="Alimentação", icon="🍽️" (restaurante)
+- "Guappo Barbeariacuritibra" → cat="Lazer", icon="✂️" (barbearia)
+
+Supermercado (icon: 🛒):
+- "Supermercado Festval" → cat="Supermercado", icon="🛒"
+- "Ifd Wms" (Maxxi/BIG via iFood) → cat="Supermercado", icon="🛒"
+- "Filial" + número → cat="Supermercado", icon="🛒"
+- "Marcio Popilarz" → cat="Supermercado", icon="🛒"
+- "Mercadolivre" → cat="Outros", icon="📦" (produto genérico — não sabe o que é)
+
+Saúde (icon: 💊):
+- "Souzamed" ou "farmácia" ou "drogaria" → cat="Saúde", icon="💊"
+
+Transporte (icon: 🚗):
+- "Brava Motors" → cat="Transporte", icon="🚗" (moto/carro)
+- "Uber" ou "99" ou "Cabify" → cat="Transporte", icon="🚗"
+
+Games (icon: 🎮):
+- "Sonyplaystat" ou "PlayStation" ou "Xbox" ou "Steam" ou "Nintendo" → cat="Games", icon="🎮"
+
+CATEGORIAS disponíveis: Alimentação, Supermercado, Moradia, Transporte, Saúde, Lazer, Airsoft, Assinatura, Educação, Vestuário, Combustível, Games, Gasto Cartão, Renda Extra, Outros`
 
 interface RcpRow {
   _id: number
@@ -147,7 +185,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
     return db.transactions.filter(t => t.cardId===invoiceCard.id && txBelongsToInvoice(t, invoiceCard, curMonth, curYear)).sort((a,b)=>b.dateISO.localeCompare(a.dateISO))
   }, [invoiceCard, db.transactions, curMonth, curYear])
 
-  const CATS_RCP = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','Lazer','Airsoft','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Gasto Cartão','Renda Extra','Outros']
+  const CATS_RCP = ['Alimentação','Supermercado','Moradia','Transporte','Saúde','Lazer','Airsoft','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Games','Gasto Cartão','Renda Extra','Outros']
 
   function rcpIsDup(name: string, val: number, dateISO: string) {
     return db.transactions.some(t =>
