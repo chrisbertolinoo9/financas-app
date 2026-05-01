@@ -4,7 +4,46 @@ import { C_COLOR, C_ICON, isoToDisplay, genId, fmt } from '../lib/utils'
 import type { Transaction } from '../types'
 
 const PROXY = 'https://financas-proxy.chrisbertolinoo9.workers.dev/v1/messages'
-const CATS = ['Alimentação','Moradia','Transporte','Saúde','Lazer','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Outros']
+const CATS = ['Alimentação','Moradia','Transporte','Saúde','Lazer','Salário','Freelance','Assinatura','Educação','Vestuário','Combustível','Benefício','Renda Extra','Outros']
+
+const AI_PROMPT = `Analise este extrato bancário brasileiro. Retorne APENAS JSON válido sem markdown:
+{"transactions":[{"name":"descrição curta","val":0.00,"type":"receita|despesa|transferencia","cat":"categoria","date":"DD/MM","icon":"emoji"}]}
+
+REGRAS DE CLASSIFICAÇÃO:
+
+TRANSFERENCIAS (type="transferencia") — NÃO são receita nem despesa:
+- Qualquer movimentação entre contas do MESMO titular (mesmo CPF, bancos diferentes)
+- "Transferência enviada pelo Pix CHRISTIAN BERTOLINO" → transferencia
+- "Transferência recebida pelo Pix CHRISTIAN BERTOLINO" → transferencia  
+- "Transferência enviada pelo Pix DAIANA VITORIA" saída → transferencia
+- Pix para 99PAY / de 99PAY → transferencia (movimentação entre contas próprias)
+- Pix para Banco XP / Rico → transferencia (pagamento de cartão de investimento)
+
+RECEITAS (type="receita"):
+- "CAIXA ECONOMICA FEDERAL" entrada → receita, cat="Renda Extra", icon="💰" (FGTS aniversário)
+- Pix recebido do Santander com nome CHRISTIAN BERTOLINO → receita, cat="Salário", icon="💼"
+- "Depósito Recebido por Boleto" → receita, cat="Benefício", icon="🎁" (benefício Swile/VR)
+- "CLAUDETE" ou nome de familiar → receita, cat="Renda Extra", icon="💰"
+- Pix recebido de DAIANA VITORIA → transferencia (repasse entre casal)
+- Rendimentos, cashback, estorno → receita, cat="Renda Extra"
+
+DESPESAS (type="despesa"):
+- "Pagamento de fatura" → despesa, cat="Outros", icon="💳"
+- "RECARGAPAY" saída → despesa, cat="Outros", icon="💳" (recarga cartão pré-pago)
+- "UNINTER" → despesa, cat="Educação", icon="📚"
+- "TELEFONICA" ou "VIVO" ou "CLARO" ou "TIM" → despesa, cat="Assinatura", icon="📱"
+- "MARCIO POPILARZ" → despesa, cat="Alimentação", icon="🛒" (supermercado)
+- "PJBANK" → despesa, cat="Moradia", icon="🏠" (aluguel/moradia)
+- Pagamento de boleto para empresas → despesa, cat="Outros"
+- Compras, restaurantes, serviços → despesa com categoria adequada
+
+CATEGORIAS disponíveis: Alimentação, Moradia, Transporte, Saúde, Lazer, Salário, Freelance, Assinatura, Educação, Vestuário, Combustível, Benefício, Renda Extra, Outros
+
+IMPORTANTE:
+- Valores numéricos puros sem R$ ou pontos de milhar (ex: 1234.56)
+- Descrição curta e legível (máximo 40 caracteres)
+- Se não houver transações retorne transactions:[]
+- Inclua TODAS as transações, inclusive transferências`
 
 interface PendingRow {
   _id: number
@@ -12,7 +51,7 @@ interface PendingRow {
   _dup: boolean
   name: string
   val: number
-  type: 'receita' | 'despesa'
+  type: 'receita' | 'despesa' | 'transferencia'
   cat: string
   icon: string
   date: string
@@ -27,14 +66,11 @@ interface Props {
 }
 
 export default function ImportModal({ onClose, curMonth, curYear, presetAccId }: Props) {
-  const { db, addTransaction } = useDB()
+  const { db, addTransaction, addTransfer } = useDB()
   const [step, setStep] = useState(1)
   const [files, setFiles] = useState<{file: File; dataUrl: string; type: 'image'|'pdf'; name: string}[]>([])
-
-  // Se veio presetAccId, pre-seleciona a conta
   const [destType, setDestType] = useState<'none'|'card'|'acc'>(presetAccId ? 'acc' : 'none')
   const [destId, setDestId] = useState(presetAccId || '')
-
   const [pending, setPending] = useState<PendingRow[]>([])
   const [loading, setLoading] = useState(false)
   const [aiMsg, setAiMsg] = useState('Processando...')
@@ -46,7 +82,6 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
   const fileRef = useRef<HTMLInputElement>(null)
 
   const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
-
   const presetAcc = presetAccId ? db.accounts.find(a => a.id === presetAccId) : null
 
   function isDup(name: string, val: number) {
@@ -78,7 +113,7 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
       ['Lendo arquivo...','Identificando texto'],
       ['Detectando tabelas...','Localizando transações'],
       ['Extraindo dados...','Datas, valores, descrições'],
-      ['Classificando...','Sugerindo categorias'],
+      ['Classificando...','Aplicando regras de categorização'],
       ['Verificando duplicatas...','Comparando histórico'],
     ]
     let mi = 0
@@ -94,7 +129,7 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
           content.push({ type:'image', source:{ type:'base64', media_type: f.file.type||'image/jpeg', data: f.dataUrl.split(',')[1] } })
         }
       }
-      content.push({ type:'text', text: `Analise ${files.length>1?'estes arquivos':'este arquivo'} de extrato/fatura bancária${hasPdf?' (PDF)':' (imagem)'}. Retorne APENAS JSON válido sem markdown:\n{\"transactions\":[{\"name\":\"descrição\",\"val\":0.00,\"type\":\"despesa ou receita\",\"cat\":\"Alimentação|Moradia|Transporte|Saúde|Lazer|Salário|Freelance|Assinatura|Educação|Vestuário|Combustível|Outros\",\"date\":\"DD/MM\",\"icon\":\"emoji\"}]}\nRegras: cartão=despesa, crédito bancário=receita, débito=despesa. Valores numéricos puros sem R$. Se não houver transações retorne transactions:[].` })
+      content.push({ type:'text', text: AI_PROMPT })
       const headers: Record<string,string> = { 'Content-Type':'application/json' }
       if (hasPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25'
       const resp = await fetch(PROXY, { method:'POST', headers, body: JSON.stringify({ model:'claude-opus-4-5', max_tokens:4000, messages:[{ role:'user', content }] }) })
@@ -105,10 +140,11 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
       const extracted = JSON.parse(raw)
       const year = refYear
       const month = (refMonth+1).toString().padStart(2,'0')
-      const rows: PendingRow[] = (extracted.transactions||[]).map((t: {name:string;val:number;type:'receita'|'despesa';cat:string;icon:string;date:string}, i: number) => {
+      const rows: PendingRow[] = (extracted.transactions||[]).map((t: {name:string;val:number;type:'receita'|'despesa'|'transferencia';cat:string;icon:string;date:string}, i: number) => {
         const parts = (t.date||'').split('/')
         const dateISO = parts.length===2 ? `${year}-${month}-${parts[0].padStart(2,'0')}` : `${year}-${month}-01`
-        return { ...t, _id:i, _sel:!isDup(t.name,t.val), _dup:isDup(t.name,t.val), dateISO }
+        const dup = isDup(t.name, t.val)
+        return { ...t, _id:i, _sel:!dup, _dup:dup, dateISO }
       })
       setProg(100); setAiMsg('Concluído!'); setAiSub('')
       await new Promise(r => setTimeout(r, 400))
@@ -125,21 +161,41 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
     if (!toImp.length) return
     const finalCardId = destType==='card' ? destId : null
     const finalAccId  = destType==='acc'  ? destId : null
+
     toImp.forEach(r => {
-      const t: Transaction = {
-        id: genId(), name:r.name, cat:r.cat, type:r.type, val:r.val,
-        dateISO:r.dateISO, date:isoToDisplay(r.dateISO),
-        icon:r.icon||C_ICON[r.cat]||'💰', color:C_COLOR[r.cat]||'#6b7591',
-        accId: finalCardId ? null : finalAccId,
-        cardId: finalCardId,
-        toAccId: null,
-        invoiceMonth: finalCardId ? refMonth : null,
-        invoiceYear:  finalCardId ? refYear  : null,
+      if (r.type === 'transferencia') {
+        // Transferencias importadas: registra como transferencia sem conta destino definida
+        // O usuario pode depois vincular manualmente
+        const t: Transaction = {
+          id: genId(), name: r.name, cat: 'Transferência',
+          type: 'transferencia', val: r.val,
+          dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
+          icon: '⇄', color: '#6b7591',
+          accId: finalAccId, cardId: null, toAccId: null,
+          invoiceMonth: null, invoiceYear: null,
+        }
+        addTransaction(t)
+      } else {
+        const t: Transaction = {
+          id: genId(), name: r.name, cat: r.cat, type: r.type, val: r.val,
+          dateISO: r.dateISO, date: isoToDisplay(r.dateISO),
+          icon: r.icon || C_ICON[r.cat] || '💰',
+          color: C_COLOR[r.cat] || '#6b7591',
+          accId: finalCardId ? null : finalAccId,
+          cardId: finalCardId,
+          toAccId: null,
+          invoiceMonth: finalCardId ? refMonth : null,
+          invoiceYear:  finalCardId ? refYear  : null,
+        }
+        addTransaction(t)
       }
-      addTransaction(t)
     })
     setImported(toImp.length); setStep(4)
   }
+
+  const transferCount = pending.filter(r => r._sel && r.type === 'transferencia').length
+  const recCount  = pending.filter(r => r._sel && r.type === 'receita').length
+  const despCount = pending.filter(r => r._sel && r.type === 'despesa').length
 
   const stepStyle = (n: number) => ({
     width:24, height:24, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
@@ -152,26 +208,25 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
 
   const inputStyle = { background:'var(--bg3)', border:'1.5px solid var(--border)', borderRadius:'8px', padding:'8px 10px', fontFamily:'Sora,sans-serif', fontSize:'12px', color:'var(--text)', outline:'none', width:'100%' }
 
+  const typeColor = (type: string) => type === 'receita' ? 'var(--green)' : type === 'transferencia' ? 'var(--muted)' : 'var(--red)'
+  const typePrefix = (type: string) => type === 'receita' ? '+' : type === 'transferencia' ? '⇄' : '-'
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background:'rgba(0,0,0,.75)', backdropFilter:'blur(8px)' }}
       onClick={e => { if(e.target===e.currentTarget) onClose() }}>
       <div className="w-full rounded-2xl p-6 overflow-y-auto" style={{ background:'var(--card2)', border:'1px solid var(--border)', maxWidth:720, maxHeight:'92vh', animation:'mdIn .2s ease' }}>
 
-        {/* Header */}
         <div className="flex items-start justify-between mb-2">
           <div>
             <div className="text-base font-bold">📄 Importar Extrato / Fatura</div>
             <div className="text-xs mt-0.5" style={{color:'var(--muted)'}}>
-              {presetAcc
-                ? 'Conta: ' + presetAcc.name + ' · ' + MONTHS[refMonth] + ' ' + refYear
-                : 'Print, imagem ou PDF — a IA extrai e você revisa'}
+              {presetAcc ? 'Conta: ' + presetAcc.name + ' · ' + MONTHS[refMonth] + ' ' + refYear : 'Print, imagem ou PDF — a IA extrai e você revisa'}
             </div>
           </div>
           <button onClick={onClose} style={{background:'none',border:'none',color:'var(--muted)',fontSize:18,cursor:'pointer',padding:'2px 6px'}}>✕</button>
         </div>
 
-        {/* Steps */}
         <div className="flex items-center my-5">
           {['Upload','Análise IA','Revisão','Concluído'].map((lbl,i) => (
             <div key={lbl} className="flex items-center" style={{flex: i<3?1:'auto'}}>
@@ -184,12 +239,10 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
           ))}
         </div>
 
-        {/* STEP 1 — Upload */}
         {step===1 && (
           <div>
-            {/* Mes de referencia */}
             <div className="rounded-xl p-3.5 mb-3" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
-              <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{color:'var(--muted)'}}>📅 Mês de referência dos lançamentos</div>
+              <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{color:'var(--muted)'}}>📅 Mês de referência</div>
               <div className="flex gap-2">
                 <select value={refMonth} onChange={e=>setRefMonth(Number(e.target.value))}
                   style={{flex:1,background:'var(--bg)',border:'1.5px solid var(--border)',borderRadius:8,padding:'9px 12px',fontFamily:'Sora,sans-serif',fontSize:13,fontWeight:700,color:'var(--text)',outline:'none',cursor:'pointer'}}>
@@ -201,11 +254,10 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
                 </select>
               </div>
               <div className="text-xs mt-2" style={{color:'var(--muted)'}}>
-                Transações importadas serão datadas em <span style={{color:'var(--accent)',fontWeight:700}}>{MONTHS[refMonth]} {refYear}</span>
+                Lançamentos datados em <span style={{color:'var(--accent)',fontWeight:700}}>{MONTHS[refMonth]} {refYear}</span>
               </div>
             </div>
 
-            {/* Dropzone */}
             <div className="relative rounded-xl p-8 text-center mb-3 transition-all"
               style={{border:'2px dashed var(--border)',cursor:'pointer'}}
               onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.borderColor='var(--accent)';(e.currentTarget as HTMLElement).style.background='var(--glow)'}}
@@ -234,16 +286,13 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
               </div>
             )}
 
-            {/* Destino — se veio presetAccId mostra badge fixo, senao mostra seletor */}
             <div className="rounded-xl p-3.5 mb-4" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
               <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{color:'var(--muted)'}}>📌 Vincular ao</div>
               {presetAcc ? (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{background:'var(--glow)',border:'1.5px solid var(--accent)'}}>
-                    <span style={{fontSize:14}}>🏦</span>
-                    <span className="text-xs font-bold" style={{color:'var(--accent)'}}>{presetAcc.name}</span>
-                    <span className="text-xs" style={{color:'var(--muted)'}}>· pré-selecionado</span>
-                  </div>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{background:'var(--glow)',border:'1.5px solid var(--accent)',display:'inline-flex'}}>
+                  <span style={{fontSize:14}}>🏦</span>
+                  <span className="text-xs font-bold" style={{color:'var(--accent)'}}>{presetAcc.name}</span>
+                  <span className="text-xs" style={{color:'var(--muted)'}}>· pré-selecionado</span>
                 </div>
               ) : (
                 <div className="flex gap-2 flex-wrap">
@@ -270,7 +319,6 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
           </div>
         )}
 
-        {/* STEP 2 — Loading IA */}
         {step===2 && (
           <div className="py-8">
             <div className="rounded-xl p-5" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
@@ -290,15 +338,14 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
           </div>
         )}
 
-        {/* STEP 3 — Revisao */}
         {step===3 && (
           <div>
-            <div className="flex gap-3 p-3 rounded-xl mb-4" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
+            <div className="flex gap-3 p-3 rounded-xl mb-3" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
               {[
-                {label:'Encontradas',value:pending.length,color:'var(--cyan)'},
-                {label:'Novas',value:pending.filter(r=>r._sel).length,color:'var(--green)'},
-                {label:'Duplicadas',value:pending.filter(r=>r._dup).length,color:'var(--red)'},
-                {label:'Total',value:'R$ '+fmt(pending.filter(r=>r._sel).reduce((s,r)=>s+r.val,0)),color:'var(--yellow)'},
+                {label:'Receitas',value:recCount,color:'var(--green)'},
+                {label:'Despesas',value:despCount,color:'var(--red)'},
+                {label:'Transf.',value:transferCount,color:'var(--muted)'},
+                {label:'Total R$',value:fmt(pending.filter(r=>r._sel && r.type!=='transferencia').reduce((s,r)=>s+(r.type==='receita'?r.val:-r.val),0)),color:'var(--cyan)'},
               ].map(k=>(
                 <div key={k.label} className="flex-1 text-center">
                   <div className="font-mono text-lg font-extrabold" style={{color:k.color}}>{k.value}</div>
@@ -307,32 +354,38 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
               ))}
             </div>
 
+            {transferCount > 0 && (
+              <div className="rounded-lg px-3 py-2 mb-3 text-xs" style={{background:'rgba(99,102,241,.08)',border:'1px solid rgba(99,102,241,.2)',color:'var(--muted)'}}>
+                ⇄ <strong style={{color:'var(--accent)'}}>{transferCount} transferência{transferCount!==1?'s':''}</strong> identificada{transferCount!==1?'s':''} — não entram no balanço de receitas/despesas
+              </div>
+            )}
+
             <div className="flex items-center justify-between mb-2">
-              <div className="text-xs" style={{color:'var(--muted)'}}>✏️ Clique para editar</div>
+              <div className="text-xs" style={{color:'var(--muted)'}}>✏️ Clique para editar · <span style={{color:'var(--muted)'}}>⇄ = transferência</span></div>
               <div className="flex gap-1">
                 <button onClick={()=>setPending(p=>p.map(r=>({...r,_sel:true})))} style={{fontSize:10,padding:'3px 8px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:5,color:'var(--muted)',cursor:'pointer',fontFamily:'Sora,sans-serif'}}>Todos</button>
                 <button onClick={()=>setPending(p=>p.map(r=>({...r,_sel:false})))} style={{fontSize:10,padding:'3px 8px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:5,color:'var(--muted)',cursor:'pointer',fontFamily:'Sora,sans-serif'}}>Nenhum</button>
               </div>
             </div>
 
-            <div className="rounded-xl overflow-hidden mb-4" style={{border:'1px solid var(--border)',maxHeight:320,overflowY:'auto'}}>
-              <div className="grid gap-1 px-3 py-2 text-xs font-bold uppercase tracking-wide" style={{gridTemplateColumns:'24px 1fr 100px 60px 70px',color:'var(--muted)',borderBottom:'1px solid var(--border)',background:'var(--bg3)'}}>
+            <div className="rounded-xl overflow-hidden mb-4" style={{border:'1px solid var(--border)',maxHeight:340,overflowY:'auto'}}>
+              <div className="grid gap-1 px-3 py-2 text-xs font-bold uppercase tracking-wide" style={{gridTemplateColumns:'24px 1fr 100px 60px 80px',color:'var(--muted)',borderBottom:'1px solid var(--border)',background:'var(--bg3)'}}>
                 <div/><div>Descrição</div><div>Categoria</div><div>Data</div><div>Valor</div>
               </div>
               {pending.map((r,i) => (
                 <div key={r._id} className="grid gap-1 px-3 py-2 items-center transition-colors"
-                  style={{gridTemplateColumns:'24px 1fr 100px 60px 70px',borderBottom:'1px solid var(--border)',background:r._dup?'rgba(239,68,68,.04)':r._sel?'':'rgba(0,0,0,.15)',opacity:r._sel?1:.5}}>
+                  style={{gridTemplateColumns:'24px 1fr 100px 60px 80px',borderBottom:'1px solid var(--border)',background:r.type==='transferencia'?'rgba(99,102,241,.04)':r._dup?'rgba(239,68,68,.04)':r._sel?'':'rgba(0,0,0,.15)',opacity:r._sel?1:.5}}>
                   <div onClick={()=>setPending(p=>p.map((x,j)=>j===i?{...x,_sel:!x._sel}:x))}
                     style={{width:17,height:17,borderRadius:4,border:'1px solid var(--border)',background:r._sel?'var(--accent)':'var(--bg3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,cursor:'pointer',color:'#fff'}}>
                     {r._sel?'✓':''}
                   </div>
                   <input value={r.name} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,name:e.target.value}:x))} style={{...inputStyle,padding:'4px 6px',fontSize:11}} />
-                  <select value={r.cat} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,cat:e.target.value}:x))} style={{...inputStyle,padding:'4px 6px',fontSize:11}}>
-                    {CATS.map(c=><option key={c}>{c}</option>)}
-                  </select>
+                  <div style={{fontFamily:'Sora,sans-serif',fontSize:11,color:typeColor(r.type),fontWeight:700,textAlign:'center'}}>
+                    {r.type==='transferencia' ? '⇄ Transf.' : r.cat}
+                  </div>
                   <input value={r.date} onChange={e=>setPending(p=>p.map((x,j)=>j===i?{...x,date:e.target.value}:x))} style={{...inputStyle,padding:'4px 6px',fontSize:11}} />
-                  <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,fontWeight:700,color:r.type==='receita'?'var(--green)':'var(--red)'}}>
-                    {r.type==='receita'?'+':'-'} {fmt(r.val)}
+                  <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:11,fontWeight:700,color:typeColor(r.type)}}>
+                    {typePrefix(r.type)} {fmt(r.val)}
                   </div>
                 </div>
               ))}
@@ -341,18 +394,17 @@ export default function ImportModal({ onClose, curMonth, curYear, presetAccId }:
             <div className="flex gap-2 justify-end">
               <button onClick={()=>setStep(1)} style={{padding:'10px 20px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>← Voltar</button>
               <button onClick={doImport} style={{padding:'10px 24px',background:'linear-gradient(135deg,var(--accent),var(--accent2))',border:'none',borderRadius:'9px',color:'#fff',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>
-                Importar {pending.filter(r=>r._sel).length} transação{pending.filter(r=>r._sel).length!==1?'ões':''}
+                Importar {pending.filter(r=>r._sel).length} lançamento{pending.filter(r=>r._sel).length!==1?'s':''}
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 4 — Sucesso */}
         {step===4 && (
           <div className="text-center py-10">
             <div className="text-5xl mb-3">✅</div>
-            <div className="text-lg font-extrabold mb-2">{imported} transaç{imported!==1?'ões':'ão'} importada{imported!==1?'s':''}!</div>
-            <div className="text-xs mb-6" style={{color:'var(--muted)'}}>Os dados foram salvos e sincronizados na nuvem.</div>
+            <div className="text-lg font-extrabold mb-2">{imported} lançamento{imported!==1?'s':''} importado{imported!==1?'s':''}!</div>
+            <div className="text-xs mb-6" style={{color:'var(--muted)'}}>Salvos e sincronizados na nuvem.</div>
             <div className="flex gap-3 justify-center">
               <button onClick={()=>{setStep(1);setFiles([]);setPending([])}} style={{padding:'10px 20px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--muted)',fontFamily:'Sora,sans-serif',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>
                 📷 Importar mais
