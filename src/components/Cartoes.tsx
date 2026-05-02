@@ -144,6 +144,35 @@ export default function Cartoes({ curMonth, curYear }: Props) {
   const totalFaturas = useMemo(() => db.cards.reduce((s,c) => s+cardSpend(c.id), 0), [db.cards, db.transactions, curMonth, curYear])
   const totalLimit = useMemo(() => db.cards.reduce((s,c) => s+c.limit, 0), [db.cards])
 
+  const cardReport = useMemo(() => {
+    return db.cards.map(card => {
+      const txs = db.transactions.filter(t =>
+        t.cardId === card.id && txBelongsToInvoice(t, card, curMonth, curYear)
+      )
+      const cats: Record<string,number> = {}
+      txs.forEach(t => { if(t.type==='despesa') cats[t.cat] = (cats[t.cat]||0)+t.val })
+      const total = txs.filter(t=>t.type==='despesa').reduce((s,t)=>s+t.val,0)
+      return { card, cats, total, txCount: txs.filter(t=>t.type==='despesa').length }
+    }).filter(r => r.total > 0).sort((a,b) => b.total - a.total)
+  }, [db.cards, db.transactions, curMonth, curYear])
+
+  const accAlimentacao = useMemo(() => {
+    const FOOD_CATS = ['Alimentação','Supermercado']
+    return db.accounts
+      .filter(a => !a.archived)
+      .map(a => {
+        const total = db.transactions.filter(t =>
+          t.accId === a.id &&
+          t.type === 'despesa' &&
+          FOOD_CATS.includes(t.cat) &&
+          inMonth(t.dateISO, curMonth, curYear)
+        ).reduce((s,t)=>s+t.val,0)
+        return { acc: a, total }
+      })
+      .filter(r => r.total > 0)
+      .sort((a,b) => b.total - a.total)
+  }, [db.accounts, db.transactions, curMonth, curYear])
+
   const inputStyle = { width:'100%', background:'var(--bg3)', border:'1.5px solid var(--border)', borderRadius:'9px', padding:'10px 12px', fontFamily:'Sora,sans-serif', fontSize:'13px', color:'var(--text)', outline:'none' }
 
   function openNewCard() {
@@ -393,7 +422,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
               <div className="text-center py-4 text-xs" style={{color:'var(--muted)'}}>Sem gastos no mês</div>
             ) : (
               <div className="flex flex-col gap-3">
-                {cardReport.map(({card, cats, total, txCount}) => {
+                {cardReport.map(({card, cats, total, txCount}: {card: Card, cats: Record<string,number>, total: number, txCount: number}) => {
                   const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,4)
                   const maxCat = topCats[0]?.[1] || 1
                   return (
@@ -406,7 +435,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
                         <div className="font-mono text-sm font-extrabold" style={{color:'var(--red)'}}>R$ {fmt(total)}</div>
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        {topCats.map(([cat,val])=>(
+                        {(topCats as [string,number][]).map(([cat,val])=>(
                           <div key={cat}>
                             <div className="flex justify-between mb-0.5">
                               <span className="text-xs" style={{color:'var(--muted)'}}>{cat}</span>
@@ -433,7 +462,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
               <div className="text-center py-4 text-xs" style={{color:'var(--muted)'}}>Sem gastos de alimentação nas contas</div>
             ) : (
               <div className="flex flex-col gap-2">
-                {accAlimentacao.map(({acc,total})=>(
+                {accAlimentacao.map(({acc,total}: {acc: typeof db.accounts[0], total: number})=>(
                   <div key={acc.id} className="flex justify-between items-center px-3 py-2.5 rounded-lg" style={{background:'var(--bg3)'}}>
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:acc.color||'#6b7591'}} />
@@ -444,7 +473,7 @@ export default function Cartoes({ curMonth, curYear }: Props) {
                 ))}
                 <div className="flex justify-between items-center px-3 py-2.5 rounded-lg mt-1" style={{background:'rgba(234,179,8,.07)',border:'1px solid rgba(234,179,8,.2)'}}>
                   <span className="text-xs font-bold">Total alimentação (contas)</span>
-                  <span className="font-mono text-xs font-extrabold" style={{color:'#eab308'}}>R$ {fmt(accAlimentacao.reduce((s,r)=>s+r.total,0))}</span>
+                  <span className="font-mono text-xs font-extrabold" style={{color:'#eab308'}}>R$ {fmt(accAlimentacao.reduce((s: number,r: {acc: typeof db.accounts[0], total: number})=>s+r.total,0))}</span>
                 </div>
               </div>
             )}
