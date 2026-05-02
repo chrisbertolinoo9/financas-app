@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useDB } from '../contexts/DBContext'
-import { fmt, txBelongsToInvoice, isoToDisplay, C_COLOR, C_ICON, genId, todayISO } from '../lib/utils'
+import { fmt, txBelongsToInvoice, isoToDisplay, C_COLOR, C_ICON, genId, todayISO, inMonth } from '../lib/utils'
 import type { Card, Transaction } from '../types'
 import ImportModal from './ImportModal'
 
@@ -360,27 +360,96 @@ export default function Cartoes({ curMonth, curYear }: Props) {
           </div>
         </div>
 
-        {/* Resumo */}
-        <div className="rounded-2xl p-5" style={{ background:'var(--card)', border:'1px solid var(--border)' }}>
-          <div className="text-sm font-bold mb-4">Resumo</div>
-          <div className="flex flex-col gap-2.5">
-            {[
-              { label:'Total faturas (mês)', value:fmt(totalFaturas), color:'var(--purple)' },
-              { label:'Limite total', value:fmt(totalLimit), color:'var(--blue)' },
-              { label:'Disponível total', value:fmt(totalLimit-totalFaturas), color:'var(--green)' },
-            ].map(k=>(
-              <div key={k.label} className="flex justify-between px-3 py-2.5 rounded-lg" style={{background:'var(--bg3)'}}>
-                <span className="text-xs" style={{color:'var(--muted)'}}>{k.label}</span>
-                <span className="font-mono text-xs font-bold" style={{color:k.color}}>R$ {k.value}</span>
+        {/* Resumo + Relatório */}
+        <div className="flex flex-col gap-4">
+
+          {/* Resumo rápido */}
+          <div className="rounded-2xl p-5" style={{ background:'var(--card)', border:'1px solid var(--border)' }}>
+            <div className="text-sm font-bold mb-3">Resumo</div>
+            <div className="flex flex-col gap-2">
+              {[
+                { label:'Total faturas (mês)', value:fmt(totalFaturas), color:'var(--purple)' },
+                { label:'Limite total', value:fmt(totalLimit), color:'var(--blue)' },
+                { label:'Disponível total', value:fmt(totalLimit-totalFaturas), color:'var(--green)' },
+              ].map(k=>(
+                <div key={k.label} className="flex justify-between px-3 py-2.5 rounded-lg" style={{background:'var(--bg3)'}}>
+                  <span className="text-xs" style={{color:'var(--muted)'}}>{k.label}</span>
+                  <span className="font-mono text-xs font-bold" style={{color:k.color}}>R$ {k.value}</span>
+                </div>
+              ))}
+              <div className="flex justify-between px-3 py-2.5 rounded-lg" style={{background:'rgba(139,92,246,.08)',border:'1px solid rgba(139,92,246,.18)'}}>
+                <span className="text-xs font-bold">Próximo vencimento</span>
+                <span className="text-xs" style={{color:'var(--muted)'}}>
+                  {db.cards.length ? 'Dia '+Math.min(...db.cards.map(c=>c.due)) : '—'}
+                </span>
               </div>
-            ))}
-            <div className="flex justify-between px-3 py-2.5 rounded-lg" style={{background:'rgba(139,92,246,.08)',border:'1px solid rgba(139,92,246,.18)'}}>
-              <span className="text-xs font-bold">Próximo vencimento</span>
-              <span className="text-xs" style={{color:'var(--muted)'}}>
-                {db.cards.length ? 'Dia '+Math.min(...db.cards.map(c=>c.due)) : '—'}
-              </span>
             </div>
           </div>
+
+          {/* Gastos por cartão no mês */}
+          <div className="rounded-2xl p-5" style={{ background:'var(--card)', border:'1px solid var(--border)' }}>
+            <div className="text-sm font-bold mb-3">🧾 Gastos por Cartão</div>
+            {cardReport.length === 0 ? (
+              <div className="text-center py-4 text-xs" style={{color:'var(--muted)'}}>Sem gastos no mês</div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {cardReport.map(({card, cats, total, txCount}) => {
+                  const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,4)
+                  const maxCat = topCats[0]?.[1] || 1
+                  return (
+                    <div key={card.id} className="rounded-xl p-3" style={{background:'var(--bg3)',border:'1px solid var(--border)'}}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <div className="text-xs font-bold">{card.name}</div>
+                          <div className="text-xs" style={{color:'var(--muted)'}}>{txCount} lançamento{txCount!==1?'s':''}</div>
+                        </div>
+                        <div className="font-mono text-sm font-extrabold" style={{color:'var(--red)'}}>R$ {fmt(total)}</div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {topCats.map(([cat,val])=>(
+                          <div key={cat}>
+                            <div className="flex justify-between mb-0.5">
+                              <span className="text-xs" style={{color:'var(--muted)'}}>{cat}</span>
+                              <span className="font-mono text-xs font-semibold">R$ {fmt(val)}</span>
+                            </div>
+                            <div className="h-1 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,.06)'}}>
+                              <div className="h-full rounded-full" style={{width:Math.round(val/maxCat*100)+'%',background:C_COLOR[cat]||'#6b7591'}} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Alimentação das contas */}
+          <div className="rounded-2xl p-5" style={{ background:'var(--card)', border:'1px solid var(--border)' }}>
+            <div className="text-sm font-bold mb-1">🍽️ Alimentação nas Contas</div>
+            <div className="text-xs mb-3" style={{color:'var(--muted)'}}>Alimentação + Supermercado debitados direto nas contas</div>
+            {accAlimentacao.length === 0 ? (
+              <div className="text-center py-4 text-xs" style={{color:'var(--muted)'}}>Sem gastos de alimentação nas contas</div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {accAlimentacao.map(({acc,total})=>(
+                  <div key={acc.id} className="flex justify-between items-center px-3 py-2.5 rounded-lg" style={{background:'var(--bg3)'}}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:acc.color||'#6b7591'}} />
+                      <span className="text-xs font-semibold">{acc.name}</span>
+                    </div>
+                    <span className="font-mono text-xs font-bold" style={{color:'var(--red)'}}>- R$ {fmt(total)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between items-center px-3 py-2.5 rounded-lg mt-1" style={{background:'rgba(234,179,8,.07)',border:'1px solid rgba(234,179,8,.2)'}}>
+                  <span className="text-xs font-bold">Total alimentação (contas)</span>
+                  <span className="font-mono text-xs font-extrabold" style={{color:'#eab308'}}>R$ {fmt(accAlimentacao.reduce((s,r)=>s+r.total,0))}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
